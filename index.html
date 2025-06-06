@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>Emu.io - Shipment Map FPS</title>
+<title>Shipment FPS Map</title>
 <style>
   html, body {
     margin: 0; padding: 0; overflow: hidden; height: 100%; background: #111;
@@ -35,7 +35,6 @@
 <script src="https://cdn.jsdelivr.net/npm/three@0.125.2/examples/js/controls/PointerLockControls.js"></script>
 <script>
 (() => {
-  // Setup basics
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x202025);
   const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
@@ -45,16 +44,13 @@
   renderer.shadowMap.enabled = true;
   document.body.appendChild(renderer.domElement);
 
-  // HUD elements
   const healthText = document.getElementById('healthText');
   const ammoText = document.getElementById('ammoText');
 
-  // Controls
   const controls = new THREE.PointerLockControls(camera, document.body);
   document.body.addEventListener('click', () => {
     if (!controls.isLocked) controls.lock();
   });
-
   scene.add(controls.getObject());
 
   // Lighting
@@ -68,33 +64,71 @@
   dirLight.shadow.mapSize.height = 2048;
   scene.add(dirLight);
 
-  // Floor
+  // Ground with grid texture to see map edges better
+  const gridTexture = new THREE.TextureLoader().load('https://threejs.org/examples/textures/grid.png');
+  gridTexture.wrapS = gridTexture.wrapT = THREE.RepeatWrapping;
+  gridTexture.repeat.set(25, 25);
+
   const floorGeo = new THREE.PlaneGeometry(200, 200);
-  const floorMat = new THREE.MeshStandardMaterial({color: 0x303030});
+  const floorMat = new THREE.MeshStandardMaterial({ map: gridTexture, roughness: 1, metalness: 0 });
   const floor = new THREE.Mesh(floorGeo, floorMat);
   floor.rotation.x = -Math.PI/2;
   floor.receiveShadow = true;
   scene.add(floor);
 
-  // Container geometry & colors (typical shipping container colors)
+  // Container geometry & colors
   const containerGeo = new THREE.BoxGeometry(8,4,8);
-  const containerColors = [0x8B0000, 0x004080, 0x2E8B57, 0xDAA520, 0x8B4513]; // reds, blues, green, gold, brown
+  const containerColors = [0x8B0000, 0x004080, 0x2E8B57, 0xDAA520, 0x8B4513];
 
-  // Shipment map container positions (like real Shipment map):
-  // Layout is irregular with stacks of 1-2 containers, spaced about 9-10 units apart
+  // Shipment container layout — carefully placed to look like real Shipment map
+  // Coordinates adapted from an overhead Shipment map scaled to our world units
   const containerPositions = [
-    // Row 1
-    {x:-16, y:2, z:-12}, {x:-8, y:2, z:-12}, {x:0, y:2, z:-12}, {x:8, y:2, z:-12}, {x:16, y:2, z:-12},
-    // Row 2 (stacked containers)
-    {x:-12, y:2, z:-4}, {x:-12, y:6, z:-4}, // stack of 2
-    {x:-4, y:2, z:-4}, {x:4, y:2, z:-4}, {x:12, y:2, z:-4}, {x:12, y:6, z:-4}, // another stack
-    // Row 3
-    {x:-16, y:2, z:4}, {x:-8, y:2, z:4}, {x:0, y:2, z:4}, {x:8, y:2, z:4}, {x:16, y:2, z:4},
-    // Row 4
-    {x:-8, y:2, z:12}, {x:0, y:2, z:12}, {x:8, y:2, z:12}
+    // Bottom row (back of map)
+    {x:-24, y:2, z:-24},
+    {x:-16, y:2, z:-24},
+    {x:-8,  y:2, z:-24},
+    {x:0,   y:2, z:-24},
+    {x:8,   y:2, z:-24},
+    {x:16,  y:2, z:-24},
+    {x:24,  y:2, z:-24},
+
+    // Second row from bottom (some stacked containers)
+    {x:-20, y:2, z:-16},
+    {x:-20, y:6, z:-16}, // stacked container
+    {x:-12, y:2, z:-16},
+    {x:-4,  y:2, z:-16},
+    {x:4,   y:2, z:-16},
+    {x:12,  y:2, z:-16},
+    {x:20,  y:2, z:-16},
+
+    // Middle row
+    {x:-24, y:2, z:-8},
+    {x:-16, y:2, z:-8},
+    {x:-8,  y:2, z:-8},
+    {x:0,   y:2, z:-8},
+    {x:8,   y:2, z:-8},
+    {x:16,  y:2, z:-8},
+    {x:24,  y:2, z:-8},
+
+    // Fourth row with stacks
+    {x:-20, y:2, z:0},
+    {x:-20, y:6, z:0},
+    {x:-12, y:2, z:0},
+    {x:-4,  y:2, z:0},
+    {x:4,   y:2, z:0},
+    {x:12,  y:2, z:0},
+    {x:20,  y:2, z:0},
+
+    // Top row (front of map)
+    {x:-24, y:2, z:8},
+    {x:-16, y:2, z:8},
+    {x:-8,  y:2, z:8},
+    {x:0,   y:2, z:8},
+    {x:8,   y:2, z:8},
+    {x:16,  y:2, z:8},
+    {x:24,  y:2, z:8}
   ];
 
-  // Add containers
   const containers = [];
   for(const pos of containerPositions) {
     const color = containerColors[Math.floor(Math.random()*containerColors.length)];
@@ -125,7 +159,7 @@
   });
   document.addEventListener('keyup', (e) => { keys[e.code] = false; });
 
-  // Gun (player weapon) setup
+  // Gun setup
   const gunGeo = new THREE.BoxGeometry(0.4, 0.25, 1);
   const gunMat = new THREE.MeshStandardMaterial({color: 0x222222, roughness: 0.4, metalness: 0.7});
   const gun = new THREE.Mesh(gunGeo, gunMat);
@@ -147,7 +181,6 @@
     update(delta) {
       if (!this.alive) return;
       this.mesh.position.add(this.velocity.clone().multiplyScalar(delta));
-      // Remove bullet if far away
       if(this.mesh.position.length() > 300) this.destroy();
     }
     destroy() {
@@ -156,12 +189,9 @@
     }
   }
 
-  // Player bullets array
   const playerBullets = [];
-  // Enemy bullets array
   const enemyBullets = [];
 
-  // Shoot function
   function shoot() {
     if (!controls.isLocked) return;
     if (ammo <= 0) return;
@@ -174,19 +204,16 @@
     playerBullets.push(bullet);
   }
 
-  // Reload function
   function reload() {
     ammo = maxAmmo;
     ammoText.textContent = `${ammo} / ${maxAmmo}`;
   }
 
-  // Enemies
   class Enemy {
     constructor() {
       const geo = new THREE.BoxGeometry(1, 2, 1);
       const mat = new THREE.MeshStandardMaterial({color: 0xaa0000});
       this.mesh = new THREE.Mesh(geo, mat);
-      // Spawn enemy at random around map avoiding containers
       let tries = 0;
       do {
         this.mesh.position.set((Math.random() - 0.5) * 80, 1, (Math.random() - 0.5) * 80);
@@ -194,30 +221,26 @@
       } while (checkCollision(this.mesh.position, containers, 3) && tries < 20);
       this.mesh.castShadow = true;
       this.health = 100;
-      this.speed = 4;
+      this.speed = 6; // slightly faster enemy speed
       this.lastShot = 0;
-      this.shootInterval = 1500; // milliseconds
+      this.shootInterval = 1500;
       scene.add(this.mesh);
     }
     update(delta, playerPos) {
       if (this.health <= 0) return;
 
-      // Move towards player
       const dirToPlayer = playerPos.clone().sub(this.mesh.position);
       const distance = dirToPlayer.length();
       dirToPlayer.normalize();
 
       if (distance > 3) {
         const moveStep = dirToPlayer.clone().multiplyScalar(this.speed * delta);
-
-        // Check collisions with containers before moving
         const newPos = this.mesh.position.clone().add(moveStep);
         if (!checkCollision(newPos, containers, 4)) {
           this.mesh.position.copy(newPos);
         }
       }
 
-      // Shoot at player if close enough and cooldown passed
       if (distance < 20) {
         const now = performance.now();
         if (now - this.lastShot > this.shootInterval) {
@@ -229,7 +252,7 @@
     shootAt(targetPos) {
       const dir = targetPos.clone().sub(this.mesh.position).normalize();
       const bulletPos = this.mesh.position.clone();
-      bulletPos.y += 1.2; // shoot from chest height
+      bulletPos.y += 1.2;
       const bullet = new Bullet(bulletPos, dir, 50, 0xff0000);
       enemyBullets.push(bullet);
     }
@@ -241,11 +264,9 @@
     }
   }
 
-  // Spawn enemies
   const enemies = [];
   for(let i=0; i<6; i++) enemies.push(new Enemy());
 
-  // Collision check function (AABB-like)
   function checkCollision(position, objects, halfSize=1) {
     for(const obj of objects) {
       const objPos = obj.position;
@@ -260,7 +281,6 @@
     return false;
   }
 
-  // Player collision check with containers, push back if colliding
   function resolvePlayerCollision() {
     const pos = controls.getObject().position;
     for(const cont of containers) {
@@ -269,7 +289,6 @@
       const overlapX = 4 + 0.3 - Math.abs(dx);
       const overlapZ = 4 + 0.3 - Math.abs(dz);
       if(overlapX > 0 && overlapZ > 0 && pos.y < 5) {
-        // Push player out on the axis with smaller overlap
         if(overlapX < overlapZ) {
           pos.x += dx > 0 ? overlapX : -overlapX;
         } else {
@@ -283,14 +302,12 @@
   const playerHeight = 1.6;
   velocity.set(0, 0, 0);
   const gravity = 30;
-  const speed = 15;
+  const speed = 30; // increased speed x2 from before
   canJump = false;
 
-  // Shooting cooldown
   let lastShotTime = 0;
   const shotCooldown = 200;
 
-  // Animate loop
   function animate() {
     requestAnimationFrame(animate);
     const time = performance.now();
@@ -298,12 +315,10 @@
     prevTime = time;
 
     if(controls.isLocked) {
-      // Movement input
       direction.z = Number(keys['KeyS']) - Number(keys['KeyW']);
       direction.x = Number(keys['KeyD']) - Number(keys['KeyA']);
       direction.normalize();
 
-      // Apply friction
       velocity.x -= velocity.x * 10.0 * delta;
       velocity.z -= velocity.z * 10.0 * delta;
       velocity.y -= gravity * delta;
@@ -318,14 +333,11 @@
         canJump = false;
       }
 
-      // Move player horizontally
       controls.moveRight(-velocity.x * delta);
       controls.moveForward(-velocity.z * delta);
 
-      // Move vertically
       controls.getObject().position.y += velocity.y * delta;
 
-      // Floor collision
       if (controls.getObject().position.y < playerHeight) {
         velocity.y = 0;
         controls.getObject().position.y = playerHeight;
@@ -334,11 +346,9 @@
 
       resolvePlayerCollision();
 
-      // Update bullets
       for(let i=playerBullets.length-1; i>=0; i--) {
         const b = playerBullets[i];
         b.update(delta);
-        // Check collision with enemies
         for(const e of enemies) {
           if(e.health <= 0) continue;
           if(b.mesh.position.distanceTo(e.mesh.position) < 1) {
@@ -364,29 +374,26 @@
         }
         if(!b.alive) enemyBullets.splice(i,1);
       }
+
+      enemies.forEach(enemy => enemy.update(delta, controls.getObject().position));
     }
 
     renderer.render(scene, camera);
   }
 
-  // Respawn player safely (outside containers)
   function respawn() {
     health = 100;
     healthText.textContent = health;
-
-    // Safe spawn point at center front of map (outside containers)
-    controls.getObject().position.set(0, playerHeight, 25);
+    controls.getObject().position.set(0, playerHeight, 30); // spawn in front of map, outside containers
     velocity.set(0, 0, 0);
   }
 
-  // Window resize
   window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth/window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
 
-  // Shoot on mouse click, with cooldown
   window.addEventListener('mousedown', () => {
     if(!controls.isLocked) return;
     const now = performance.now();
@@ -396,10 +403,9 @@
     shoot();
   });
 
-  // Initial camera position (safe spawn)
   respawn();
-
   animate();
+
 })();
 </script>
 </body>
