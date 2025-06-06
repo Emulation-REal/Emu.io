@@ -1,120 +1,151 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>3D Shooter</title>
+  <meta charset="UTF-8">
+  <title>Emu.io - 3D FPS Game</title>
   <style>
-    html, body {
-      margin: 0; padding: 0;
-      width: 100%; height: 100%;
+    body, html {
+      margin: 0;
+      padding: 0;
       overflow: hidden;
-      background: #111;
       font-family: Arial, sans-serif;
-      user-select: none;
+      height: 100vh;
+      background: #000;
     }
-    #mainMenu, #pauseMenu {
+
+    #main-menu {
       position: absolute;
-      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      background: url('https://images.unsplash.com/photo-1600250390024-324e4d1b5f2d?fit=crop&w=1920&q=80') center center / cover no-repeat;
+      backdrop-filter: blur(8px);
       display: flex;
-      align-items: center;
-      justify-content: center;
       flex-direction: column;
-      background: rgba(0,0,0,0.7);
-      backdrop-filter: blur(5px);
-      z-index: 10;
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
     }
-    #mainMenu h1 {
-      font-size: 3rem;
+
+    #main-menu h1 {
+      font-size: 4em;
       color: white;
-      margin-bottom: 40px;
-      text-shadow: 0 0 10px white;
+      text-shadow: 0 0 10px #000;
     }
-    #playBtn, #resumeBtn {
-      font-size: 1.5rem;
-      padding: 15px 40px;
-      background: #333;
+
+    #main-menu button {
+      margin-top: 20px;
+      font-size: 24px;
+      padding: 15px 30px;
+      border: 2px solid lightgray;
+      background: rgba(60, 60, 60, 0.85);
       color: white;
-      border: 2px solid #aaa;
-      border-radius: 8px;
+      border-radius: 10px;
       cursor: pointer;
-      transition: 0.3s;
+      transition: background 0.3s;
     }
-    #playBtn:hover, #resumeBtn:hover {
-      background: #444;
-      border-color: #fff;
+
+    #main-menu button:hover {
+      background: rgba(100, 100, 100, 0.85);
     }
+
+    #pause-menu {
+      display: none;
+      position: absolute;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0,0,0,0.8);
+      z-index: 90;
+      color: white;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+    }
+
+    #pause-menu h2 {
+      font-size: 36px;
+    }
+
+    #pause-menu button {
+      font-size: 20px;
+      margin: 10px;
+      padding: 10px 20px;
+      background: #555;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+
     #hud {
       position: absolute;
       top: 10px;
       left: 10px;
       color: white;
-      font-size: 1rem;
-      z-index: 5;
-      text-shadow: 0 0 5px black;
+      z-index: 10;
+      font-size: 18px;
     }
+
+    #crosshair {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 20px;
+      height: 20px;
+      margin-left: -10px;
+      margin-top: -10px;
+      z-index: 10;
+      pointer-events: none;
+    }
+
+    #crosshair::before, #crosshair::after {
+      content: '';
+      position: absolute;
+      background: white;
+    }
+
+    #crosshair::before {
+      top: 9px;
+      left: 0;
+      width: 20px;
+      height: 2px;
+    }
+
+    #crosshair::after {
+      left: 9px;
+      top: 0;
+      width: 2px;
+      height: 20px;
+    }
+
     canvas {
       display: block;
-      width: 100vw;
-      height: 100vh;
-      background: #222;
     }
   </style>
 </head>
 <body>
+  <div id="main-menu">
+    <h1>Emu.io</h1>
+    <button id="play-button">Play</button>
+  </div>
+  <div id="pause-menu">
+    <h2>Paused</h2>
+    <button id="resume-button">Resume</button>
+    <button onclick="location.reload()">Exit to Main Menu</button>
+  </div>
+  <div id="hud">
+    <div>Health: <span id="health">100</span></div>
+    <div>Ammo: <span id="ammo">30</span></div>
+  </div>
+  <div id="crosshair"></div>
+  <canvas id="gameCanvas"></canvas>
 
-<div id="mainMenu">
-  <h1>3D Shooter</h1>
-  <button id="playBtn">Play</button>
-</div>
-
-<div id="pauseMenu" style="display: none;">
-  <h2 style="color:white">Paused</h2>
-  <button id="resumeBtn">Resume</button>
-</div>
-
-<div id="hud" style="display: none;">
-  Ammo: <span id="ammoCount">30</span>/<span id="magSize">30</span><br>
-  Health: <span id="healthCount">100</span><br>
-  <small>WASD = move, Mouse = look, Click = shoot, R = reload, P = pause</small>
-</div>
-
-<canvas id="gameCanvas"></canvas>
-
-<script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/controls/PointerLockControls.js"></script>
-
-<script>
-const canvas = document.getElementById('gameCanvas');
-const playBtn = document.getElementById('playBtn');
-const resumeBtn = document.getElementById('resumeBtn');
-const mainMenu = document.getElementById('mainMenu');
-const pauseMenu = document.getElementById('pauseMenu');
-const hud = document.getElementById('hud');
-
-let started = false;
-
-playBtn.addEventListener('click', () => {
-  mainMenu.style.display = 'none';
-  canvas.requestPointerLock(); // Try requesting early
-  startGame();
-});
-
-canvas.addEventListener('click', () => {
-  if (!started) {
-    document.body.requestPointerLock();
-  }
-});
-
-// Your entire 3D game code should go here
-function startGame() {
-  started = true;
-  hud.style.display = 'block';
-
-  // Your previous full game code goes here...
-  // (Use the last script I gave you with controls, player, enemies, etc.)
-  // You can paste everything inside this function or keep it above.
-}
-</script>
-
+  <script src="https://cdn.jsdelivr.net/npm/three@0.125.2/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.125.2/examples/js/controls/PointerLockControls.js"></script>
+  <script>
+    document.getElementById('play-button').onclick = () => {
+      document.getElementById('main-menu').style.display = 'none';
+      // Initialize your 3D game logic here
+      alert("Game starting! (Add your game code below)");
+    };
+  </script>
 </body>
 </html>
