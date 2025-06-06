@@ -2,9 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>Emu.io - Airsoft Field FPS</title>
+<title>Emu.io - Airsoft FPS</title>
 <style>
-  /* ... your existing CSS here ... */
   html, body {
     margin: 0; padding: 0; overflow: hidden;
     font-family: "Segoe UI", sans-serif;
@@ -32,6 +31,7 @@
     margin-left: -2px;
     margin-top: -2px;
     z-index: 5;
+    display: none;
   }
   #main-menu, #pause-menu {
     position: absolute;
@@ -102,10 +102,7 @@
     let health = 100, ammo = 10, maxAmmo = 10;
     let isPaused = false;
     let playerVelocity = new THREE.Vector3();
-    let direction = new THREE.Vector3();
     let canJump = false;
-    let lastShotTime = 0;
-    let gun;
 
     const keys = {};
 
@@ -171,7 +168,7 @@
 
       // Ground
       const groundMat = new THREE.MeshStandardMaterial({ color: 0x3a5f0b });
-      const groundGeo = new THREE.PlaneGeometry(400, 400);
+      const groundGeo = new THREE.PlaneGeometry(800, 800);
       const ground = new THREE.Mesh(groundGeo, groundMat);
       ground.rotation.x = -Math.PI / 2;
       ground.receiveShadow = true;
@@ -180,27 +177,29 @@
       // Jersey barriers
       const barrierMat = new THREE.MeshStandardMaterial({ color: 0xdadada });
       const barrierGeo = new THREE.BoxGeometry(6, 2, 2);
-      for (let z = -150; z <= 150; z += 15) {
-        for (let x = -150; x <= 150; x += 15) {
+      for (let z = -350; z <= 350; z += 15) {
+        for (let x = -350; x <= 350; x += 15) {
           if (Math.random() < 0.3) continue;
           const barrier = new THREE.Mesh(barrierGeo, barrierMat);
           barrier.position.set(x + (Math.random() - 0.5) * 4, 1, z + (Math.random() - 0.5) * 4);
           barrier.castShadow = true;
           barrier.receiveShadow = true;
           scene.add(barrier);
+          barrier.userData.isBarrier = true;
         }
       }
 
-      // Houses
+      // Houses (enterable via collision)
       const houseMat = new THREE.MeshStandardMaterial({ color: 0x8b4513, roughness: 0.8 });
       const windowMat = new THREE.MeshStandardMaterial({ color: 0x000000, opacity: 0.5, transparent: true });
       const houseGeo = new THREE.BoxGeometry(12, 8, 12);
       const housePositions = [
-        [-100, 4, -100],
-        [50, 4, -80],
-        [-120, 4, 50],
-        [80, 4, 70],
-        [0, 4, 0]
+        [-250, 4, -250],
+        [150, 4, -200],
+        [-200, 4, 150],
+        [220, 4, 220],
+        [0, 4, 0],
+        [100, 4, 100],
       ];
       for (const pos of housePositions) {
         const house = new THREE.Group();
@@ -209,6 +208,7 @@
         mainBox.castShadow = true;
         mainBox.receiveShadow = true;
         house.add(mainBox);
+
         // Windows
         const window1 = new THREE.Mesh(new THREE.PlaneGeometry(3, 3), windowMat);
         window1.position.set(0, 4, 6.01);
@@ -225,14 +225,16 @@
         window4.position.set(-6.01, 4, 0);
         window4.rotation.y = Math.PI / 2;
         house.add(window4);
+
         house.position.set(pos[0], pos[1], pos[2]);
+        house.userData.isHouse = true;
         scene.add(house);
       }
 
       // Controls
       controls = new PointerLockControls(camera, document.body);
       scene.add(controls.getObject());
-      controls.getObject().position.set(0, 1.6, 180);
+      controls.getObject().position.set(0, 1.6, 350);
 
       canvas.addEventListener('click', () => {
         if (!controls.isLocked) {
@@ -245,16 +247,22 @@
       // Gun
       const gunMat = new THREE.MeshStandardMaterial({ color: 0x555555 });
       const gunGeo = new THREE.BoxGeometry(0.3, 0.2, 1);
-      gun = new THREE.Mesh(gunGeo, gunMat);
+      const gun = new THREE.Mesh(gunGeo, gunMat);
       gun.position.set(0.5, -0.5, -1);
       camera.add(gun);
 
       // Enemies
-      for (let i = 0; i < 8; i++) spawnEnemy();
+      for (let i = 0; i < 12; i++) spawnEnemy();
 
       document.addEventListener('mousedown', shoot);
       document.addEventListener('keydown', e => {
         if (e.code === 'KeyR') reload();
+      });
+
+      window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
       });
     }
 
@@ -293,14 +301,16 @@
       const enemy = new THREE.Mesh(enemyGeo, enemyMat);
       enemy.castShadow = true;
       enemy.position.set(
-        (Math.random() - 0.5) * 300,
+        (Math.random() - 0.5) * 700,
         1.5,
-        (Math.random() - 0.5) * 300
+        (Math.random() - 0.5) * 700
       );
       enemy.health = 100;
       scene.add(enemy);
       enemies.push(enemy);
     }
+
+    let lastShotTime = 0;
 
     function animate() {
       requestAnimationFrame(animate);
@@ -312,7 +322,7 @@
       for (let i = bullets.length - 1; i >= 0; i--) {
         const b = bullets[i];
         b.position.add(b.userData.velocity);
-        if (b.position.length() > 500) {
+        if (b.position.length() > 1000) {
           scene.remove(b);
           bullets.splice(i, 1);
           continue;
@@ -353,7 +363,7 @@
       }
 
       // Movement controls
-      direction.set(0, 0, 0);
+      let direction = new THREE.Vector3();
       if (keys['KeyW']) direction.z -= 1;
       if (keys['KeyS']) direction.z += 1;
       if (keys['KeyA']) direction.x -= 1;
@@ -369,34 +379,43 @@
       camRight.crossVectors(new THREE.Vector3(0, 1, 0), camDir).normalize();
 
       const move = new THREE.Vector3();
-      move.addScaledVector(camDir, direction.z * 10 * delta);
-      move.addScaledVector(camRight, direction.x * 10 * delta);
+      const moveSpeed = 12; // increased speed
+      move.addScaledVector(camDir, direction.z * moveSpeed * delta);
+      move.addScaledVector(camRight, direction.x * moveSpeed * delta);
 
+      // Collision detection with barriers and houses
       const newPos = controls.getObject().position.clone().add(move);
       let blocked = false;
 
       scene.children.forEach(obj => {
         if (!obj.geometry) return;
-        if (obj.geometry.type !== 'BoxGeometry') return;
-        if (obj.material.color.equals(new THREE.Color(0xdadada))) {
-          const distX = Math.abs(obj.position.x - newPos.x);
-          const distZ = Math.abs(obj.position.z - newPos.z);
-          if (distX < 4 && distZ < 2) blocked = true;
+        if (!obj.position) return;
+
+        const objPos = obj.position;
+        let sizeX = 0, sizeZ = 0;
+
+        if (obj.userData.isBarrier) {
+          sizeX = 6;
+          sizeZ = 2;
+        } else if (obj.userData.isHouse) {
+          sizeX = 12;
+          sizeZ = 12;
+        } else {
+          return;
+        }
+
+        const distX = Math.abs(objPos.x - newPos.x);
+        const distZ = Math.abs(objPos.z - newPos.z);
+        if (distX < sizeX * 0.5 + 0.5 && distZ < sizeZ * 0.5 + 0.5) {
+          blocked = true;
         }
       });
-
-      for (const h of scene.children) {
-        if (h.type === 'Group') {
-          const dist = h.position.distanceTo(new THREE.Vector3(newPos.x, h.position.y, newPos.z));
-          if (dist < 8) blocked = true;
-        }
-      }
 
       if (!blocked) {
         controls.getObject().position.add(move);
       }
 
-      if (!playerVelocity) playerVelocity = new THREE.Vector3();
+      // Gravity & Jump
       playerVelocity.y -= 30 * delta;
       controls.getObject().position.y += playerVelocity.y * delta;
 
@@ -417,7 +436,7 @@
     function respawn() {
       health = 100;
       healthText.textContent = health;
-      controls.getObject().position.set(0, 1.6, 180);
+      controls.getObject().position.set(0, 1.6, 350);
     }
   </script>
 </body>
