@@ -179,9 +179,6 @@
         scene.add(frontWall);
         objects.push(frontWall);
 
-        // Add windows: simulate by cutting holes? Since THREE.BoxGeometry can't have holes easily,
-        // we'll just add window meshes with transparent material over the wall to simulate openings visually.
-
         // Back wall
         let backWall = new THREE.Mesh(new THREE.BoxGeometry(houseSize, wallHeight, wallThickness), mat);
         backWall.position.set(pos[0], wallHeight / 2, pos[2] - houseSize / 2);
@@ -298,17 +295,6 @@
       renderer.setSize(window.innerWidth, window.innerHeight);
     }
 
-    function checkCollisions(position) {
-      const radius = 0.3; // player radius
-      for(let obj of objects){
-        const box = new THREE.Box3().setFromObject(obj);
-        if(box.containsPoint(position)){
-          return true;
-        }
-      }
-      return false;
-    }
-
     function animate() {
       requestAnimationFrame(animate);
 
@@ -318,37 +304,37 @@
       velocity.x -= velocity.x * 10.0 * delta;
       velocity.z -= velocity.z * 10.0 * delta;
 
-      // Movement vector relative to camera direction (corrected)
-      let forward = new THREE.Vector3();
+      const direction = new THREE.Vector3();
+      const forward = new THREE.Vector3();
       camera.getWorldDirection(forward);
       forward.y = 0;
       forward.normalize();
 
-      let right = new THREE.Vector3();
+      const right = new THREE.Vector3();
       right.crossVectors(forward, camera.up);
+      right.normalize();
 
-      let direction = new THREE.Vector3();
       if(moveForward) direction.add(forward);
       if(moveBackward) direction.sub(forward);
       if(moveRight) direction.add(right);
       if(moveLeft) direction.sub(right);
+
       direction.normalize();
 
       if(direction.length() > 0) {
-        velocity.x -= direction.x * speed * delta;
-        velocity.z -= direction.z * speed * delta;
+        velocity.x += direction.x * speed * delta;
+        velocity.z += direction.z * speed * delta;
       }
 
       const nextPosition = controls.getObject().position.clone();
       nextPosition.x += velocity.x;
       nextPosition.z += velocity.z;
 
-      // check collision with ground only (floor has no collision box, so skip that)
+      // check collision with walls/barriers
       let hit = false;
       for(let i=0; i<objects.length; i++) {
         if(objects[i] === scene.children[1]) continue; // floor, skip
         const box = new THREE.Box3().setFromObject(objects[i]);
-        // expand box down to floor so player can't go under
         box.min.y = 0;
         if(box.containsPoint(new THREE.Vector3(nextPosition.x, playerHeight, nextPosition.z))) {
           hit = true;
