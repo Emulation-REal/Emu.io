@@ -4,6 +4,7 @@
 <meta charset="UTF-8" />
 <title>Emu.io - Airsoft Field FPS</title>
 <style>
+  /* ... your existing CSS here ... */
   html, body {
     margin: 0; padding: 0; overflow: hidden;
     font-family: "Segoe UI", sans-serif;
@@ -81,9 +82,10 @@
   <div id="crosshair"></div>
   <canvas id="gameCanvas"></canvas>
 
-  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/controls/PointerLockControls.js"></script>
-  <script>
+  <script type="module">
+    import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.module.js';
+    import { PointerLockControls } from 'https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/controls/PointerLockControls.js';
+
     const canvas = document.getElementById('gameCanvas');
     const hud = document.getElementById('hud');
     const healthText = document.getElementById('healthText');
@@ -103,6 +105,7 @@
     let direction = new THREE.Vector3();
     let canJump = false;
     let lastShotTime = 0;
+    let gun;
 
     const keys = {};
 
@@ -174,13 +177,12 @@
       ground.receiveShadow = true;
       scene.add(ground);
 
-      // Jersey barriers (white concrete barriers)
+      // Jersey barriers
       const barrierMat = new THREE.MeshStandardMaterial({ color: 0xdadada });
       const barrierGeo = new THREE.BoxGeometry(6, 2, 2);
-      // Place barriers in rows with gaps and some randomness for a realistic airsoft field feel
       for (let z = -150; z <= 150; z += 15) {
         for (let x = -150; x <= 150; x += 15) {
-          if (Math.random() < 0.3) continue; // some gaps
+          if (Math.random() < 0.3) continue;
           const barrier = new THREE.Mesh(barrierGeo, barrierMat);
           barrier.position.set(x + (Math.random() - 0.5) * 4, 1, z + (Math.random() - 0.5) * 4);
           barrier.castShadow = true;
@@ -189,12 +191,10 @@
         }
       }
 
-      // Houses (simple box with window holes)
+      // Houses
       const houseMat = new THREE.MeshStandardMaterial({ color: 0x8b4513, roughness: 0.8 });
       const windowMat = new THREE.MeshStandardMaterial({ color: 0x000000, opacity: 0.5, transparent: true });
       const houseGeo = new THREE.BoxGeometry(12, 8, 12);
-
-      // Houses positions, spaced out
       const housePositions = [
         [-100, 4, -100],
         [50, 4, -80],
@@ -202,50 +202,35 @@
         [80, 4, 70],
         [0, 4, 0]
       ];
-
-      const houses = [];
-
       for (const pos of housePositions) {
         const house = new THREE.Group();
-
-        // Main building
         const mainBox = new THREE.Mesh(houseGeo, houseMat);
         mainBox.position.set(0, 4, 0);
         mainBox.castShadow = true;
         mainBox.receiveShadow = true;
         house.add(mainBox);
-
-        // Add window holes by subtracting geometry — approximated by separate planes with black transparent material
-        // Front windows
+        // Windows
         const window1 = new THREE.Mesh(new THREE.PlaneGeometry(3, 3), windowMat);
         window1.position.set(0, 4, 6.01);
         house.add(window1);
-
-        // Side windows
         const window2 = new THREE.Mesh(new THREE.PlaneGeometry(3, 3), windowMat);
         window2.position.set(6.01, 4, 0);
         window2.rotation.y = -Math.PI / 2;
         house.add(window2);
-
-        // Back windows
         const window3 = new THREE.Mesh(new THREE.PlaneGeometry(3, 3), windowMat);
         window3.position.set(0, 4, -6.01);
         window3.rotation.y = Math.PI;
         house.add(window3);
-
-        // Left windows
         const window4 = new THREE.Mesh(new THREE.PlaneGeometry(3, 3), windowMat);
         window4.position.set(-6.01, 4, 0);
         window4.rotation.y = Math.PI / 2;
         house.add(window4);
-
         house.position.set(pos[0], pos[1], pos[2]);
         scene.add(house);
-        houses.push(house);
       }
 
-      // Set player spawn far from houses and barriers
-      controls = new THREE.PointerLockControls(camera, document.body);
+      // Controls
+      controls = new PointerLockControls(camera, document.body);
       scene.add(controls.getObject());
       controls.getObject().position.set(0, 1.6, 180);
 
@@ -257,7 +242,7 @@
         }
       });
 
-      // Gun model
+      // Gun
       const gunMat = new THREE.MeshStandardMaterial({ color: 0x555555 });
       const gunGeo = new THREE.BoxGeometry(0.3, 0.2, 1);
       gun = new THREE.Mesh(gunGeo, gunMat);
@@ -276,7 +261,7 @@
     function shoot() {
       if (!controls.isLocked || ammo <= 0 || isPaused) return;
       const now = performance.now();
-      if (now - lastShotTime < 250) return; // Fire rate
+      if (now - lastShotTime < 250) return;
       lastShotTime = now;
 
       ammo--;
@@ -327,7 +312,6 @@
       for (let i = bullets.length - 1; i >= 0; i--) {
         const b = bullets[i];
         b.position.add(b.userData.velocity);
-        // Remove bullets too far
         if (b.position.length() > 500) {
           scene.remove(b);
           bullets.splice(i, 1);
@@ -343,9 +327,8 @@
 
         if (dist < 30) {
           toPlayer.normalize();
-          enemy.position.addScaledVector(toPlayer, 2 * delta); // faster speed
+          enemy.position.addScaledVector(toPlayer, 2 * delta);
 
-          // If close enough, attack player
           if (dist < 3 && Math.random() < 0.02) {
             health -= 10;
             healthText.textContent = health;
@@ -353,7 +336,6 @@
           }
         }
 
-        // Bullet collision with enemy
         for (let j = bullets.length - 1; j >= 0; j--) {
           const b = bullets[j];
           if (b.position.distanceTo(enemy.position) < 1.2) {
@@ -363,14 +345,14 @@
             if (enemy.health <= 0) {
               scene.remove(enemy);
               enemies.splice(i, 1);
-              setTimeout(spawnEnemy, 4000); // respawn after 4s
+              setTimeout(spawnEnemy, 4000);
             }
             break;
           }
         }
       }
 
-      // Movement controls (no inversion)
+      // Movement controls
       direction.set(0, 0, 0);
       if (keys['KeyW']) direction.z -= 1;
       if (keys['KeyS']) direction.z += 1;
@@ -378,7 +360,6 @@
       if (keys['KeyD']) direction.x += 1;
       direction.normalize();
 
-      // Calculate move vector relative to camera facing
       const camDir = new THREE.Vector3();
       camera.getWorldDirection(camDir);
       camDir.y = 0;
@@ -391,22 +372,19 @@
       move.addScaledVector(camDir, direction.z * 10 * delta);
       move.addScaledVector(camRight, direction.x * 10 * delta);
 
-      // Collision detection with barriers and houses simplified as bounding spheres
       const newPos = controls.getObject().position.clone().add(move);
       let blocked = false;
 
-      // Check jersey barriers collision (rough bounding box)
       scene.children.forEach(obj => {
         if (!obj.geometry) return;
         if (obj.geometry.type !== 'BoxGeometry') return;
-        if (obj.material.color.equals(new THREE.Color(0xdadada))) { // barriers color
+        if (obj.material.color.equals(new THREE.Color(0xdadada))) {
           const distX = Math.abs(obj.position.x - newPos.x);
           const distZ = Math.abs(obj.position.z - newPos.z);
           if (distX < 4 && distZ < 2) blocked = true;
         }
       });
 
-      // Check houses collision (rough bounding sphere radius ~8)
       for (const h of scene.children) {
         if (h.type === 'Group') {
           const dist = h.position.distanceTo(new THREE.Vector3(newPos.x, h.position.y, newPos.z));
@@ -418,7 +396,6 @@
         controls.getObject().position.add(move);
       }
 
-      // Gravity and jump
       if (!playerVelocity) playerVelocity = new THREE.Vector3();
       playerVelocity.y -= 30 * delta;
       controls.getObject().position.y += playerVelocity.y * delta;
