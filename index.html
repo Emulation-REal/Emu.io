@@ -2,250 +2,266 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Emu.io - 3D FPS</title>
+  <title>Emu.io - 3D FPS Game</title>
   <style>
     html, body {
       margin: 0;
       overflow: hidden;
+      height: 100%;
       font-family: Arial, sans-serif;
       background: #000;
-      user-select: none;
     }
-    canvas {
-      display: block;
-    }
-    #main-menu, #pause-menu {
+    #main-menu {
       position: absolute;
-      width: 100%;
-      height: 100%;
-      background: rgba(20, 20, 20, 0.9);
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: url('https://i.imgur.com/CL3Ey1r.jpeg') center/cover no-repeat;
       backdrop-filter: blur(8px);
-      z-index: 10;
       display: flex;
-      flex-direction: column;
       justify-content: center;
       align-items: center;
-      color: white;
+      z-index: 10;
+      flex-direction: column;
     }
-    #main-menu button, #pause-menu button {
-      background: #333;
+    #main-menu button {
+      font-size: 28px;
+      padding: 15px 35px;
+      background: #444;
       color: white;
-      border: 2px solid #999;
-      padding: 15px 40px;
-      font-size: 20px;
-      margin: 10px;
-      border-radius: 5px;
+      border: 2px solid #aaa;
+      border-radius: 10px;
       cursor: pointer;
-      transition: all 0.3s;
-    }
-    #main-menu button:hover, #pause-menu button:hover {
-      background: #555;
     }
     #hud {
       position: absolute;
-      top: 20px;
-      left: 20px;
+      top: 15px;
+      left: 15px;
+      z-index: 5;
       color: white;
       font-size: 18px;
-      z-index: 2;
       display: none;
     }
     #crosshair {
       position: absolute;
       left: 50%;
       top: 50%;
-      width: 8px;
-      height: 8px;
-      margin-left: -4px;
-      margin-top: -4px;
+      width: 10px;
+      height: 10px;
       background: white;
       border-radius: 50%;
-      z-index: 2;
+      margin-left: -5px;
+      margin-top: -5px;
+      z-index: 5;
       display: none;
+    }
+    #pause-menu {
+      display: none;
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0,0,0,0.7);
+      color: white;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+      z-index: 15;
+    }
+    #pause-menu button {
+      padding: 10px 20px;
+      font-size: 20px;
+      background: #333;
+      border: 1px solid #fff;
+      color: white;
+      margin-top: 20px;
+      cursor: pointer;
     }
   </style>
 </head>
 <body>
   <div id="main-menu">
-    <h1>Emu.io</h1>
-    <button id="play-btn">Play</button>
+    <h1 style="color:white;text-shadow:0 0 10px black;">Emu.io</h1>
+    <button id="start-game">Play</button>
   </div>
-
-  <div id="pause-menu" style="display:none;">
-    <h2>Game Paused</h2>
-    <button id="resume-btn">Resume</button>
-    <button onclick="location.reload()">Exit to Menu</button>
-  </div>
-
   <div id="hud">
-    <div>Health: <span id="health">100</span></div>
-    <div>Ammo: <span id="ammo">10</span></div>
+    Health: <span id="health">100</span><br>
+    Ammo: <span id="ammo">10</span> / 10
   </div>
   <div id="crosshair"></div>
-
+  <div id="pause-menu">
+    <h2>Paused</h2>
+    <button onclick="resumeGame()">Resume</button>
+    <button onclick="location.reload()">Main Menu</button>
+  </div>
   <canvas id="game-canvas"></canvas>
 
-  <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/examples/js/controls/PointerLockControls.js"></script>
+  <!-- Correct Three.js version -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.125.2/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.125.2/examples/js/controls/PointerLockControls.js"></script>
 
   <script>
-    let scene, camera, renderer, controls, clock;
-    let bullets = [], bots = [], map = [];
-    let health = 100, ammo = 10, maxAmmo = 10, canShoot = true, isPaused = false;
-    const keys = {};
-
+    let scene, camera, renderer, controls;
+    let bullets = [], enemies = [];
+    let health = 100, ammo = 10, reloading = false;
+    let keys = {};
+    const canvas = document.getElementById('game-canvas');
     const hud = document.getElementById('hud');
     const ammoText = document.getElementById('ammo');
     const healthText = document.getElementById('health');
     const crosshair = document.getElementById('crosshair');
-
-    const mainMenu = document.getElementById('main-menu');
     const pauseMenu = document.getElementById('pause-menu');
-    const canvas = document.getElementById('game-canvas');
 
-    document.getElementById('play-btn').onclick = () => {
-      mainMenu.style.display = 'none';
-      hud.style.display = 'block';
-      crosshair.style.display = 'block';
-      initGame();
+    document.getElementById('start-game').onclick = () => {
+      document.getElementById('main-menu').style.display = 'none';
+      init();
+      animate();
     };
 
-    document.getElementById('resume-btn').onclick = () => {
-      pauseMenu.style.display = 'none';
-      isPaused = false;
-      controls.lock();
-    };
-
-    function initGame() {
+    function init() {
       scene = new THREE.Scene();
-      camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+      camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
       renderer = new THREE.WebGLRenderer({ canvas });
       renderer.setSize(window.innerWidth, window.innerHeight);
-      clock = new THREE.Clock();
-
       controls = new THREE.PointerLockControls(camera, document.body);
       scene.add(controls.getObject());
 
-      document.body.addEventListener('click', () => {
-        if (!controls.isLocked && !isPaused) controls.lock();
+      canvas.addEventListener('click', () => {
+        if (!controls.isLocked) controls.lock();
       });
 
-      // Pause menu on ESC
-      document.addEventListener('keydown', e => {
-        if (e.code === 'Escape') {
-          isPaused = true;
-          pauseMenu.style.display = 'flex';
-          controls.unlock();
-        }
-        keys[e.code] = true;
+      controls.addEventListener('lock', () => {
+        hud.style.display = 'block';
+        crosshair.style.display = 'block';
       });
-
-      document.addEventListener('keyup', e => keys[e.code] = false);
-      document.addEventListener('mousedown', () => shoot());
-      document.addEventListener('keydown', e => {
-        if (e.code === 'KeyR') reload();
+      controls.addEventListener('unlock', () => {
+        pauseMenu.style.display = 'flex';
+        crosshair.style.display = 'none';
       });
 
       // Lighting
-      scene.add(new THREE.AmbientLight(0x999999));
-      const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
-      dirLight.position.set(5, 10, 7);
-      scene.add(dirLight);
+      scene.add(new THREE.HemisphereLight(0xffffff, 0x444444));
+      let light = new THREE.DirectionalLight(0xffffff, 1);
+      light.position.set(10, 10, 10);
+      scene.add(light);
 
-      // Ground
-      const groundMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
-      const ground = new THREE.Mesh(new THREE.PlaneGeometry(100, 100), groundMat);
-      ground.rotation.x = -Math.PI / 2;
-      scene.add(ground);
+      // Floor
+      const floorGeo = new THREE.PlaneGeometry(200, 200);
+      const floorMat = new THREE.MeshStandardMaterial({ color: 0x888888 });
+      const floor = new THREE.Mesh(floorGeo, floorMat);
+      floor.rotation.x = -Math.PI / 2;
+      scene.add(floor);
 
-      // Map containers
-      const boxMat = new THREE.MeshStandardMaterial({ color: 0x8888ff });
+      // Player spawn
+      camera.position.set(0, 2, 5);
+
+      // Crates (like CoD container map)
       for (let i = 0; i < 30; i++) {
-        const box = new THREE.Mesh(new THREE.BoxGeometry(4, 4, 8), boxMat);
-        box.position.set((Math.random() - 0.5) * 80, 2, (Math.random() - 0.5) * 80);
+        const boxGeo = new THREE.BoxGeometry(4, 4, 8);
+        const boxMat = new THREE.MeshStandardMaterial({ color: 0x334455 });
+        const box = new THREE.Mesh(boxGeo, boxMat);
+        box.position.set((Math.random() - 0.5) * 100, 2, (Math.random() - 0.5) * 100);
+        box.castShadow = true;
         scene.add(box);
-        map.push(box);
       }
 
-      // Player start position
-      controls.getObject().position.set(0, 2, 0);
+      spawnEnemies(5);
 
-      spawnBots();
-      animate();
-    }
-
-    function spawnBots() {
-      for (let i = 0; i < 5; i++) spawnBot();
-    }
-
-    function spawnBot() {
-      const bot = new THREE.Mesh(new THREE.CapsuleGeometry(0.5, 1.5, 4, 8), new THREE.MeshStandardMaterial({ color: 0xaa0000 }));
-      bot.position.set((Math.random() - 0.5) * 80, 2, (Math.random() - 0.5) * 80);
-      bot.health = 100;
-      scene.add(bot);
-      bots.push(bot);
+      document.addEventListener('keydown', e => {
+        keys[e.code] = true;
+        if (e.code === 'KeyR') reload();
+        if (e.code === 'Escape' && controls.isLocked) controls.unlock();
+      });
+      document.addEventListener('keyup', e => keys[e.code] = false);
+      document.addEventListener('mousedown', shoot);
+      window.addEventListener('resize', onResize);
     }
 
     function shoot() {
-      if (!controls.isLocked || !canShoot || ammo <= 0) return;
+      if (!controls.isLocked || reloading || ammo <= 0) return;
       ammo--;
       ammoText.textContent = ammo;
-      canShoot = false;
-      setTimeout(() => canShoot = true, 300);
-
-      const bullet = new THREE.Mesh(new THREE.SphereGeometry(0.1), new THREE.MeshStandardMaterial({ color: 0xffff00 }));
+      const bulletGeo = new THREE.SphereGeometry(0.1, 8, 8);
+      const bulletMat = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+      const bullet = new THREE.Mesh(bulletGeo, bulletMat);
       bullet.position.copy(camera.position);
       const dir = new THREE.Vector3();
       camera.getWorldDirection(dir);
-      bullet.velocity = dir.multiplyScalar(2);
+      bullet.velocity = dir.clone().multiplyScalar(1.2);
       scene.add(bullet);
       bullets.push(bullet);
     }
 
     function reload() {
-      ammo = maxAmmo;
+      if (ammo === 10 || reloading) return;
+      reloading = true;
+      setTimeout(() => {
+        ammo = 10;
+        ammoText.textContent = ammo;
+        reloading = false;
+      }, 1000);
+    }
+
+    function spawnEnemies(n) {
+      for (let i = 0; i < n; i++) {
+        const geo = new THREE.BoxGeometry(1, 2, 1);
+        const mat = new THREE.MeshStandardMaterial({ color: 0x992222 });
+        const enemy = new THREE.Mesh(geo, mat);
+        enemy.position.set((Math.random() - 0.5) * 80, 1, (Math.random() - 0.5) * 80);
+        enemy.health = 100;
+        enemy.cooldown = Math.random() * 100;
+        scene.add(enemy);
+        enemies.push(enemy);
+      }
+    }
+
+    function updateEnemies() {
+      const playerPos = controls.getObject().position;
+      enemies.forEach((enemy, i) => {
+        if (enemy.health <= 0) return;
+        const dir = new THREE.Vector3().subVectors(playerPos, enemy.position).normalize();
+        enemy.position.add(dir.multiplyScalar(0.02));
+
+        enemy.cooldown--;
+        if (enemy.cooldown <= 0 && enemy.position.distanceTo(playerPos) < 20) {
+          if (Math.random() < 0.4) {
+            health -= 10;
+            healthText.textContent = health;
+            if (health <= 0) respawnPlayer();
+          }
+          enemy.cooldown = 100 + Math.random() * 100;
+        }
+      });
+    }
+
+    function respawnPlayer() {
+      health = 100;
+      healthText.textContent = health;
+      ammo = 10;
       ammoText.textContent = ammo;
+      controls.getObject().position.set(0, 2, 5);
     }
 
     function updateBullets() {
       bullets.forEach((b, i) => {
         b.position.add(b.velocity);
-        bots.forEach((bot, j) => {
-          if (bot.position.distanceTo(b.position) < 1) {
-            bot.health -= 50;
+        enemies.forEach(enemy => {
+          if (enemy.health > 0 && b.position.distanceTo(enemy.position) < 1) {
+            enemy.health -= 50;
             scene.remove(b);
             bullets.splice(i, 1);
-            if (bot.health <= 0) {
-              scene.remove(bot);
-              bots.splice(j, 1);
-              setTimeout(spawnBot, 5000);
+            if (enemy.health <= 0) {
+              setTimeout(() => {
+                enemy.health = 100;
+                enemy.position.set((Math.random() - 0.5) * 80, 1, (Math.random() - 0.5) * 80);
+              }, 5000);
             }
           }
         });
       });
     }
 
-    function updateBots() {
-      bots.forEach(bot => {
-        if (bot.health <= 0) return;
-        const playerPos = controls.getObject().position;
-        const dir = new THREE.Vector3().subVectors(playerPos, bot.position).normalize();
-        bot.position.add(dir.multiplyScalar(0.02));
-
-        if (Math.random() < 0.01 && bot.position.distanceTo(playerPos) < 15) {
-          health -= 5;
-          if (health <= 0) {
-            health = 100;
-            controls.getObject().position.set(0, 2, 0);
-          }
-          healthText.textContent = health;
-        }
-      });
-    }
-
     function updateMovement() {
+      const speed = 0.1;
       if (!controls.isLocked) return;
-      const speed = 0.15;
       if (keys['KeyW']) controls.moveForward(speed);
       if (keys['KeyS']) controls.moveForward(-speed);
       if (keys['KeyA']) controls.moveRight(-speed);
@@ -254,18 +270,22 @@
 
     function animate() {
       requestAnimationFrame(animate);
-      if (isPaused) return;
       updateMovement();
       updateBullets();
-      updateBots();
+      updateEnemies();
       renderer.render(scene, camera);
     }
 
-    window.addEventListener('resize', () => {
+    function resumeGame() {
+      pauseMenu.style.display = 'none';
+      controls.lock();
+    }
+
+    function onResize() {
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
-    });
+    }
   </script>
 </body>
 </html>
