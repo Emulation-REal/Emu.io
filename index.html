@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>Emu.io - Container Map FPS</title>
+<title>Emu.io - Shipment Map FPS</title>
 <style>
   html, body {
     margin: 0; padding: 0; overflow: hidden; height: 100%; background: #111;
@@ -62,7 +62,7 @@
   scene.add(ambientLight);
 
   const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-  dirLight.position.set(10, 20, 10);
+  dirLight.position.set(20, 40, 20);
   dirLight.castShadow = true;
   dirLight.shadow.mapSize.width = 2048;
   dirLight.shadow.mapSize.height = 2048;
@@ -80,21 +80,27 @@
   const containerGeo = new THREE.BoxGeometry(8,4,8);
   const containerColors = [0x8B0000, 0x004080, 0x2E8B57, 0xDAA520, 0x8B4513]; // reds, blues, green, gold, brown
 
-  // Container positions in a shipment-like layout (3 rows of containers)
-  const containers = [];
-  const positions = [];
-  for(let z=-12; z<=12; z+=9) {
-    for(let x=-18; x<=18; x+=9) {
-      positions.push([x, 2, z]);
-    }
-  }
+  // Shipment map container positions (like real Shipment map):
+  // Layout is irregular with stacks of 1-2 containers, spaced about 9-10 units apart
+  const containerPositions = [
+    // Row 1
+    {x:-16, y:2, z:-12}, {x:-8, y:2, z:-12}, {x:0, y:2, z:-12}, {x:8, y:2, z:-12}, {x:16, y:2, z:-12},
+    // Row 2 (stacked containers)
+    {x:-12, y:2, z:-4}, {x:-12, y:6, z:-4}, // stack of 2
+    {x:-4, y:2, z:-4}, {x:4, y:2, z:-4}, {x:12, y:2, z:-4}, {x:12, y:6, z:-4}, // another stack
+    // Row 3
+    {x:-16, y:2, z:4}, {x:-8, y:2, z:4}, {x:0, y:2, z:4}, {x:8, y:2, z:4}, {x:16, y:2, z:4},
+    // Row 4
+    {x:-8, y:2, z:12}, {x:0, y:2, z:12}, {x:8, y:2, z:12}
+  ];
 
-  // Add containers with random container colors
-  for (const pos of positions) {
+  // Add containers
+  const containers = [];
+  for(const pos of containerPositions) {
     const color = containerColors[Math.floor(Math.random()*containerColors.length)];
     const mat = new THREE.MeshStandardMaterial({color, roughness:0.7, metalness:0.1});
     const container = new THREE.Mesh(containerGeo, mat);
-    container.position.set(pos[0], pos[1], pos[2]);
+    container.position.set(pos.x, pos.y, pos.z);
     container.castShadow = true;
     container.receiveShadow = true;
     scene.add(container);
@@ -180,7 +186,12 @@
       const geo = new THREE.BoxGeometry(1, 2, 1);
       const mat = new THREE.MeshStandardMaterial({color: 0xaa0000});
       this.mesh = new THREE.Mesh(geo, mat);
-      this.mesh.position.set((Math.random() - 0.5) * 80, 1, (Math.random() - 0.5) * 80);
+      // Spawn enemy at random around map avoiding containers
+      let tries = 0;
+      do {
+        this.mesh.position.set((Math.random() - 0.5) * 80, 1, (Math.random() - 0.5) * 80);
+        tries++;
+      } while (checkCollision(this.mesh.position, containers, 3) && tries < 20);
       this.mesh.castShadow = true;
       this.health = 100;
       this.speed = 4;
@@ -234,7 +245,7 @@
   const enemies = [];
   for(let i=0; i<6; i++) enemies.push(new Enemy());
 
-  // Collision check function (AABB)
+  // Collision check function (AABB-like)
   function checkCollision(position, objects, halfSize=1) {
     for(const obj of objects) {
       const objPos = obj.position;
@@ -288,7 +299,7 @@
 
     if(controls.isLocked) {
       // Movement input
-      direction.z = Number(keys['KeyW']) - Number(keys['KeyS']);
+      direction.z = Number(keys['KeyS']) - Number(keys['KeyW']);
       direction.x = Number(keys['KeyD']) - Number(keys['KeyA']);
       direction.normalize();
 
@@ -358,11 +369,13 @@
     renderer.render(scene, camera);
   }
 
-  // Respawn player
+  // Respawn player safely (outside containers)
   function respawn() {
     health = 100;
     healthText.textContent = health;
-    controls.getObject().position.set(0, playerHeight, 0);
+
+    // Safe spawn point at center front of map (outside containers)
+    controls.getObject().position.set(0, playerHeight, 25);
     velocity.set(0, 0, 0);
   }
 
@@ -383,8 +396,8 @@
     shoot();
   });
 
-  // Initial camera position
-  controls.getObject().position.set(0, playerHeight, 0);
+  // Initial camera position (safe spawn)
+  respawn();
 
   animate();
 })();
