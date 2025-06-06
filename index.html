@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Emu.io - Container Map FPS</title>
+  <title>Emu.io - Airsoft Field FPS</title>
   <style>
     html, body {
       margin: 0; padding: 0; overflow: hidden;
@@ -19,6 +19,8 @@
       background: rgba(0,0,0,0.4);
       padding: 8px 12px;
       border-radius: 6px;
+      max-width: 320px;
+      line-height: 1.4em;
     }
     #crosshair {
       position: absolute;
@@ -37,7 +39,7 @@
   <div id="hud">
     Health: <span id="healthText">100</span><br />
     Ammo: <span id="ammoText">10 / 10</span><br />
-    Press W/A/S/D to move, Left Click to shoot, R to reload.
+    Controls: W/A/S/D Move, Left Click Shoot, R Reload, Mouse to Look Around
   </div>
   <div id="crosshair"></div>
   <canvas id="gameCanvas"></canvas>
@@ -57,7 +59,8 @@
     let velocity = new THREE.Vector3();
     let canShoot = true;
 
-    const objects = []; // collision objects
+    const objects = []; // collision objects (barriers, houses)
+    const playerHeight = 1.6;
 
     init();
     animate();
@@ -65,7 +68,7 @@
     function init() {
       scene = new THREE.Scene();
       camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-      camera.position.set(0, 1.6, 10);
+      camera.position.set(0, playerHeight, 40);
 
       renderer = new THREE.WebGLRenderer({ canvas });
       renderer.setSize(window.innerWidth, window.innerHeight);
@@ -73,56 +76,21 @@
       clock = new THREE.Clock();
 
       // Lights
-      const ambientLight = new THREE.AmbientLight(0x888888);
+      const ambientLight = new THREE.AmbientLight(0x999999);
       const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
-      directionalLight.position.set(10, 20, 10);
+      directionalLight.position.set(30, 50, 30);
       scene.add(ambientLight, directionalLight);
 
       // Floor
-      const floorMat = new THREE.MeshStandardMaterial({ color: 0x444444 });
-      const floor = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), floorMat);
+      const floorMat = new THREE.MeshStandardMaterial({ color: 0x3b4a3b });
+      const floor = new THREE.Mesh(new THREE.PlaneGeometry(150, 150), floorMat);
       floor.rotation.x = -Math.PI / 2;
       floor.receiveShadow = true;
       scene.add(floor);
       objects.push(floor);
 
-      // Container map (shipment style)
-      const containerColors = [0x008080, 0x004040, 0x006666];
-      const containerGeo = new THREE.BoxGeometry(4, 2.5, 12);
-      // Arrange containers in rows
-      const containerPositions = [
-        [-20, 1.25, -20],
-        [-14, 1.25, -20],
-        [-8, 1.25, -20],
-        [-2, 1.25, -20],
-        [4, 1.25, -20],
-        [10, 1.25, -20],
-        [16, 1.25, -20],
-
-        [-20, 1.25, -6],
-        [-14, 1.25, -6],
-        [-8, 1.25, -6],
-        [-2, 1.25, -6],
-        [4, 1.25, -6],
-        [10, 1.25, -6],
-        [16, 1.25, -6],
-
-        [-20, 1.25, 8],
-        [-14, 1.25, 8],
-        [-8, 1.25, 8],
-        [-2, 1.25, 8],
-        [4, 1.25, 8],
-        [10, 1.25, 8],
-        [16, 1.25, 8],
-      ];
-
-      containerPositions.forEach((pos, i) => {
-        const mat = new THREE.MeshStandardMaterial({ color: containerColors[i % containerColors.length] });
-        const container = new THREE.Mesh(containerGeo, mat);
-        container.position.set(...pos);
-        scene.add(container);
-        objects.push(container);
-      });
+      // Airsoft field obstacles
+      buildAirsoftMap();
 
       // Player Controls (PointerLockControls)
       controls = new THREE.PointerLockControls(camera, document.body);
@@ -143,7 +111,7 @@
       camera.add(gun);
 
       // Spawn enemies
-      for(let i = 0; i < 5; i++) spawnEnemy();
+      for(let i = 0; i < 6; i++) spawnEnemy();
 
       // Input listeners
       document.addEventListener('keydown', onKeyDown);
@@ -153,14 +121,122 @@
       window.addEventListener('resize', onWindowResize, false);
     }
 
+    function buildAirsoftMap() {
+      // Jersey barriers (low walls)
+      const barrierGeo = new THREE.BoxGeometry(4, 1, 1);
+      const barrierMat = new THREE.MeshStandardMaterial({ color: 0xaaaaaa });
+      const barrierPositions = [
+        [-30, 0.5, 20],
+        [-26, 0.5, 20],
+        [-22, 0.5, 20],
+        [-18, 0.5, 20],
+        [20, 0.5, -20],
+        [24, 0.5, -20],
+        [28, 0.5, -20],
+        [32, 0.5, -20],
+
+        [0, 0.5, 0],
+        [4, 0.5, 0],
+        [8, 0.5, 0],
+        [12, 0.5, 0],
+        [16, 0.5, 0],
+
+        [-10, 0.5, -10],
+        [-14, 0.5, -10],
+        [-18, 0.5, -10],
+      ];
+
+      barrierPositions.forEach(pos => {
+        let barrier = new THREE.Mesh(barrierGeo, barrierMat);
+        barrier.position.set(pos[0], pos[1], pos[2]);
+        scene.add(barrier);
+        objects.push(barrier);
+      });
+
+      // Houses (enterable) — no roofs, with windows
+      const houseColors = [0x884422, 0x774400, 0x553311];
+      const houseMat = new THREE.MeshStandardMaterial({ color: 0x884422 });
+
+      const housePositions = [
+        [15, 1.25, 15],
+        [-15, 1.25, -15],
+        [25, 1.25, 10],
+        [-25, 1.25, -10],
+      ];
+
+      housePositions.forEach((pos, i) => {
+        // Walls: 4 walls - 1 unit thick, 2.5 height, 6x6 size house footprint
+        const wallThickness = 1;
+        const wallHeight = 2.5;
+        const houseSize = 6;
+
+        const color = houseColors[i % houseColors.length];
+        const mat = new THREE.MeshStandardMaterial({ color });
+
+        // Front wall with 2 windows
+        let frontWall = new THREE.Mesh(new THREE.BoxGeometry(houseSize, wallHeight, wallThickness), mat);
+        frontWall.position.set(pos[0], wallHeight / 2, pos[2] + houseSize / 2);
+        scene.add(frontWall);
+        objects.push(frontWall);
+
+        // Add windows: simulate by cutting holes? Since THREE.BoxGeometry can't have holes easily,
+        // we'll just add window meshes with transparent material over the wall to simulate openings visually.
+
+        // Back wall
+        let backWall = new THREE.Mesh(new THREE.BoxGeometry(houseSize, wallHeight, wallThickness), mat);
+        backWall.position.set(pos[0], wallHeight / 2, pos[2] - houseSize / 2);
+        scene.add(backWall);
+        objects.push(backWall);
+
+        // Left wall
+        let leftWall = new THREE.Mesh(new THREE.BoxGeometry(wallThickness, wallHeight, houseSize), mat);
+        leftWall.position.set(pos[0] - houseSize / 2, wallHeight / 2, pos[2]);
+        scene.add(leftWall);
+        objects.push(leftWall);
+
+        // Right wall
+        let rightWall = new THREE.Mesh(new THREE.BoxGeometry(wallThickness, wallHeight, houseSize), mat);
+        rightWall.position.set(pos[0] + houseSize / 2, wallHeight / 2, pos[2]);
+        scene.add(rightWall);
+        objects.push(rightWall);
+
+        // Windows (visual only, for shooting through)
+        const windowMat = new THREE.MeshStandardMaterial({ color: 0x99ccff, opacity: 0.5, transparent: true });
+        const windowGeo = new THREE.BoxGeometry(2, 1.2, 0.1);
+
+        // Front wall windows (two)
+        let window1 = new THREE.Mesh(windowGeo, windowMat);
+        window1.position.set(pos[0] - 1.5, 1.3, pos[2] + houseSize / 2 + 0.051);
+        scene.add(window1);
+        let window2 = new THREE.Mesh(windowGeo, windowMat);
+        window2.position.set(pos[0] + 1.5, 1.3, pos[2] + houseSize / 2 + 0.051);
+        scene.add(window2);
+
+        // Back wall window
+        let window3 = new THREE.Mesh(windowGeo, windowMat);
+        window3.position.set(pos[0], 1.3, pos[2] - houseSize / 2 - 0.051);
+        scene.add(window3);
+
+        // Left wall window
+        let window4 = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.2, 2), windowMat);
+        window4.position.set(pos[0] - houseSize / 2 - 0.051, 1.3, pos[2]);
+        scene.add(window4);
+
+        // Right wall window
+        let window5 = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.2, 2), windowMat);
+        window5.position.set(pos[0] + houseSize / 2 + 0.051, 1.3, pos[2]);
+        scene.add(window5);
+      });
+    }
+
     function spawnEnemy() {
       const enemyMat = new THREE.MeshStandardMaterial({ color: 0xaa0000 });
       const enemyGeo = new THREE.BoxGeometry(1, 2, 1);
       const enemy = new THREE.Mesh(enemyGeo, enemyMat);
       enemy.position.set(
-        (Math.random() * 80) - 40,
+        (Math.random() * 100) - 50,
         1,
-        (Math.random() * 80) - 40
+        (Math.random() * 100) - 50
       );
       enemy.health = 100;
       scene.add(enemy);
@@ -237,7 +313,7 @@
       requestAnimationFrame(animate);
 
       const delta = clock.getDelta();
-      const speed = 5;
+      const speed = 8;
 
       velocity.x -= velocity.x * 10.0 * delta;
       velocity.z -= velocity.z * 10.0 * delta;
@@ -251,7 +327,7 @@
       let right = new THREE.Vector3();
       right.crossVectors(forward, camera.up);
 
-      direction = new THREE.Vector3();
+      let direction = new THREE.Vector3();
       if(moveForward) direction.add(forward);
       if(moveBackward) direction.sub(forward);
       if(moveRight) direction.add(right);
@@ -267,7 +343,20 @@
       nextPosition.x += velocity.x;
       nextPosition.z += velocity.z;
 
-      if(!checkCollisions(new THREE.Vector3(nextPosition.x, controls.getObject().position.y, nextPosition.z))){
+      // check collision with ground only (floor has no collision box, so skip that)
+      let hit = false;
+      for(let i=0; i<objects.length; i++) {
+        if(objects[i] === scene.children[1]) continue; // floor, skip
+        const box = new THREE.Box3().setFromObject(objects[i]);
+        // expand box down to floor so player can't go under
+        box.min.y = 0;
+        if(box.containsPoint(new THREE.Vector3(nextPosition.x, playerHeight, nextPosition.z))) {
+          hit = true;
+          break;
+        }
+      }
+
+      if(!hit){
         controls.getObject().position.copy(nextPosition);
       } else {
         velocity.x = 0;
@@ -305,8 +394,8 @@
         let dist = dirToPlayer.length();
         if(dist < 30){
           dirToPlayer.normalize();
-          enemy.position.add(dirToPlayer.multiplyScalar(1.2 * delta));
-          if(dist < 10 && Math.random() < 0.01){
+          enemy.position.add(dirToPlayer.multiplyScalar(1.5 * delta));
+          if(dist < 10 && Math.random() < 0.02){
             health -= 5;
             if(health < 0) health = 0;
             healthText.textContent = health;
@@ -321,7 +410,7 @@
     function respawn(){
       health = 100;
       healthText.textContent = health;
-      controls.getObject().position.set(0, 1.6, 10);
+      controls.getObject().position.set(0, playerHeight, 40);
       velocity.set(0, 0, 0);
     }
   </script>
