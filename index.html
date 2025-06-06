@@ -1,575 +1,271 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<title>Emu.io - Container Map</title>
-<style>
-  body, html {
-    margin: 0; padding: 0; overflow: hidden;
-    height: 100%; background-color: #222;
-    font-family: Arial, sans-serif;
-    color: white;
-  }
-  #hud {
-    position: absolute;
-    top: 20px; left: 20px;
-    font-weight: bold; font-size: 18px;
-    z-index: 10;
-    user-select: none;
-  }
-  #health-bar-container {
-    width: 200px;
-    height: 25px;
-    background: #444;
-    border-radius: 5px;
-    overflow: hidden;
-    margin-bottom: 10px;
-  }
-  #health-bar {
-    height: 100%;
-    background: #e33;
-    width: 100%;
-    transition: width 0.2s;
-  }
-  #bullet-counter {
-    font-size: 16px;
-    margin-top: 5px;
-  }
-  #crosshair {
-    position: absolute;
-    top: 50%; left: 50%;
-    width: 30px; height: 30px;
-    margin-left: -15px; margin-top: -15px;
-    pointer-events: none;
-    z-index: 20;
-  }
-  #crosshair div {
-    position: absolute;
-    background: white;
-  }
-  #crosshair div.horizontal {
-    top: 14px; height: 2px; width: 30px;
-  }
-  #crosshair div.vertical {
-    left: 14px; width: 2px; height: 30px;
-  }
-  #pause-menu {
-    position: absolute;
-    top: 0; left: 0; width: 100vw; height: 100vh;
-    background: rgba(0,0,0,0.75);
-    display: none;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    z-index: 100;
-    user-select: none;
-  }
-  #pause-menu button {
-    font-size: 24px;
-    padding: 15px 40px;
-    margin: 10px;
-    cursor: pointer;
-    border: none;
-    border-radius: 10px;
-    background: #28a745;
-    color: white;
-    transition: background 0.3s ease;
-  }
-  #pause-menu button:hover {
-    background: #218838;
-  }
-  canvas {
-    display: block;
-    width: 100vw;
-    height: 100vh;
-    outline: none;
-    cursor: crosshair;
-  }
-</style>
+  <meta charset="UTF-8" />
+  <title>Emu.io - 3D FPS</title>
+  <style>
+    html, body {
+      margin: 0;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+      background: #000;
+      user-select: none;
+    }
+    canvas {
+      display: block;
+    }
+    #main-menu, #pause-menu {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      background: rgba(20, 20, 20, 0.9);
+      backdrop-filter: blur(8px);
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      color: white;
+    }
+    #main-menu button, #pause-menu button {
+      background: #333;
+      color: white;
+      border: 2px solid #999;
+      padding: 15px 40px;
+      font-size: 20px;
+      margin: 10px;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    #main-menu button:hover, #pause-menu button:hover {
+      background: #555;
+    }
+    #hud {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      color: white;
+      font-size: 18px;
+      z-index: 2;
+      display: none;
+    }
+    #crosshair {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 8px;
+      height: 8px;
+      margin-left: -4px;
+      margin-top: -4px;
+      background: white;
+      border-radius: 50%;
+      z-index: 2;
+      display: none;
+    }
+  </style>
 </head>
 <body>
-  <div id="hud">
-    <div id="health-bar-container"><div id="health-bar"></div></div>
-    Health: <span id="health-text">100</span><br/>
-    Bullets: <span id="bullet-count">30</span>/<span id="bullet-max">30</span>
+  <div id="main-menu">
+    <h1>Emu.io</h1>
+    <button id="play-btn">Play</button>
   </div>
-  <div id="crosshair">
-    <div class="horizontal"></div>
-    <div class="vertical"></div>
-  </div>
-  <div id="pause-menu">
-    <h1>Paused</h1>
-    <button id="resume-btn">Resume</button>
-    <button id="restart-btn">Restart</button>
-  </div>
-  <canvas id="game-canvas" tabindex="0"></canvas>
 
-  <script src="https://cdn.jsdelivr.net/npm/three@0.125.2/build/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.125.2/examples/js/controls/PointerLockControls.js"></script>
+  <div id="pause-menu" style="display:none;">
+    <h2>Game Paused</h2>
+    <button id="resume-btn">Resume</button>
+    <button onclick="location.reload()">Exit to Menu</button>
+  </div>
+
+  <div id="hud">
+    <div>Health: <span id="health">100</span></div>
+    <div>Ammo: <span id="ammo">10</span></div>
+  </div>
+  <div id="crosshair"></div>
+
+  <canvas id="game-canvas"></canvas>
+
+  <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/examples/js/controls/PointerLockControls.js"></script>
 
   <script>
-  // ---- Setup ----
-  const canvas = document.getElementById('game-canvas');
-  const hud = document.getElementById('hud');
-  const healthBar = document.getElementById('health-bar');
-  const healthText = document.getElementById('health-text');
-  const bulletCountText = document.getElementById('bullet-count');
-  const bulletMaxText = document.getElementById('bullet-max');
-  const pauseMenu = document.getElementById('pause-menu');
-  const resumeBtn = document.getElementById('resume-btn');
-  const restartBtn = document.getElementById('restart-btn');
+    let scene, camera, renderer, controls, clock;
+    let bullets = [], bots = [], map = [];
+    let health = 100, ammo = 10, maxAmmo = 10, canShoot = true, isPaused = false;
+    const keys = {};
 
-  let scene, camera, renderer, controls;
-  let bots = [];
-  let bullets = [];
-  let botBullets = [];
-  let containers = [];
+    const hud = document.getElementById('hud');
+    const ammoText = document.getElementById('ammo');
+    const healthText = document.getElementById('health');
+    const crosshair = document.getElementById('crosshair');
 
-  let keys = {};
-  let velocityY = 0;
-  let onGround = false;
-  const gravity = -0.02;
+    const mainMenu = document.getElementById('main-menu');
+    const pauseMenu = document.getElementById('pause-menu');
+    const canvas = document.getElementById('game-canvas');
 
-  // Player state
-  let health = 100;
-  const maxHealth = 100;
-  let ammo = 30;
-  const maxAmmo = 30;
-  let reloading = false;
-
-  // Map size
-  const mapSize = 120;
-
-  // Pause state
-  let paused = false;
-
-  // Sounds (simple placeholders - add your own if you want)
-  const sounds = {
-    shoot: new Audio('https://freesound.org/data/previews/341/341695_624261-lq.mp3'),
-    damage: new Audio('https://freesound.org/data/previews/256/256113_3263906-lq.mp3'),
-    reload: new Audio('https://freesound.org/data/previews/66/66717_634166-lq.mp3'),
-    death: new Audio('https://freesound.org/data/previews/178/178145_3509891-lq.mp3'),
-    walk: new Audio('https://freesound.org/data/previews/341/341695_624261-lq.mp3'), // placeholder same as shoot
-    menuMusic: new Audio('https://cdn.pixabay.com/download/audio/2022/03/23/audio_04aa47f5c9.mp3?filename=fun-arcade-game-loop-11284.mp3')
-  };
-  sounds.menuMusic.loop = true;
-  // Uncomment below line if you want menu music playing on load
-  // sounds.menuMusic.play();
-
-  // Utility box intersection helper
-  function boxIntersect(a, b) {
-    return a.min.x <= b.max.x && a.max.x >= b.min.x &&
-           a.min.y <= b.max.y && a.max.y >= b.min.y &&
-           a.min.z <= b.max.z && a.max.z >= b.min.z;
-  }
-
-  // Initialize ThreeJS scene
-  function init() {
-    scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x20232a);
-
-    camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-    camera.position.set(0, 1.6, 0);
-
-    renderer = new THREE.WebGLRenderer({canvas, antialias:true});
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-
-    // Lighting
-    const ambientLight = new THREE.AmbientLight(0x404040, 1.5);
-    scene.add(ambientLight);
-
-    const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
-    dirLight.position.set(20, 50, 10);
-    dirLight.castShadow = true;
-    dirLight.shadow.mapSize.width = 2048;
-    dirLight.shadow.mapSize.height = 2048;
-    dirLight.shadow.camera.left = -100;
-    dirLight.shadow.camera.right = 100;
-    dirLight.shadow.camera.top = 100;
-    dirLight.shadow.camera.bottom = -100;
-    scene.add(dirLight);
-
-    // Floor
-    const floorGeo = new THREE.PlaneGeometry(mapSize, mapSize);
-    const floorMat = new THREE.MeshStandardMaterial({color: 0x556655});
-    const floor = new THREE.Mesh(floorGeo, floorMat);
-    floor.rotation.x = -Math.PI/2;
-    floor.receiveShadow = true;
-    scene.add(floor);
-
-    // Containers
-    buildContainers();
-
-    // Controls
-    controls = new THREE.PointerLockControls(camera, document.body);
-    scene.add(controls.getObject());
-
-    canvas.addEventListener('click', () => {
-      if (!controls.isLocked && !paused) controls.lock();
-    });
-
-    // Player gun (3D model simple box)
-    const gunGeo = new THREE.BoxGeometry(0.2, 0.15, 1);
-    const gunMat = new THREE.MeshStandardMaterial({color: 0x0077cc, roughness:0.3, metalness:0.7});
-    const gun = new THREE.Mesh(gunGeo, gunMat);
-    gun.position.set(0.4, -0.3, -0.8);
-    camera.add(gun);
-
-    // Spawn bots
-    for(let i=0; i<10; i++) spawnBot();
-
-    // Event listeners
-    document.addEventListener('keydown', e => {
-      if(e.code === "Escape") togglePause();
-      keys[e.code] = true;
-    });
-    document.addEventListener('keyup', e => keys[e.code] = false);
-    document.addEventListener('mousedown', shoot);
-
-    window.addEventListener('resize', onWindowResize);
-
-    respawnPlayer();
-  }
-
-  // Build container objects in grid
-  function buildContainers(){
-    containers = [];
-    const containerGeo = new THREE.BoxGeometry(6,4,12);
-    const containerMat = new THREE.MeshStandardMaterial({color:0x334466, roughness:0.7});
-
-    for(let x=-50; x<=50; x+=15){
-      for(let z=-60; z<=60; z+=20){
-        // Clear center
-        if(Math.abs(x) < 15 && Math.abs(z) < 15) continue;
-        const container = new THREE.Mesh(containerGeo, containerMat);
-        container.position.set(x, 2, z);
-        container.castShadow = true;
-        container.receiveShadow = true;
-        scene.add(container);
-        containers.push(container);
-      }
-    }
-  }
-
-  // Check collisions against containers and map bounds
-  function isPositionBlocked(pos, radius=0.4){
-    const playerBox = new THREE.Box3(
-      new THREE.Vector3(pos.x - radius, pos.y - 1, pos.z - radius),
-      new THREE.Vector3(pos.x + radius, pos.y + 1, pos.z + radius)
-    );
-    for(const container of containers){
-      const containerBox = new THREE.Box3().setFromObject(container);
-      if(boxIntersect(playerBox, containerBox)) return true;
-    }
-    if(pos.x < -mapSize/2 || pos.x > mapSize/2 || pos.z < -mapSize/2 || pos.z > mapSize/2) return true;
-    return false;
-  }
-
-  // Player respawn
-  function respawnPlayer(){
-    health = maxHealth;
-    updateHealthUI();
-    ammo = maxAmmo;
-    updateAmmoUI();
-    controls.getObject().position.set(0, 1.6, 0);
-    velocityY = 0;
-    onGround = false;
-    reloading = false;
-  }
-
-  // Spawn bot at random container area not too close to player
-  function spawnBot(){
-    const botGeo = new THREE.BoxGeometry(1, 2, 1);
-    const botMat = new THREE.MeshStandardMaterial({color: 0x222222});
-    const bot = new THREE.Mesh(botGeo, botMat);
-    bot.castShadow = true;
-    bot.receiveShadow = true;
-
-    // Find spawn pos far from player
-    let pos;
-    do {
-      pos = new THREE.Vector3(
-        (Math.random()-0.5)*mapSize*0.9,
-        1,
-        (Math.random()-0.5)*mapSize*0.9
-      );
-    } while(pos.distanceTo(controls.getObject().position) < 15 || isPositionBlocked(pos));
-
-    bot.position.copy(pos);
-    bot.health = 100;
-    bot.lastShootTime = 0;
-    scene.add(bot);
-    bots.push(bot);
-  }
-
-  // Handle shooting by player
-  function shoot(){
-    if(paused || reloading || ammo <= 0 || !controls.isLocked) return;
-
-    ammo--;
-    updateAmmoUI();
-    sounds.shoot.play();
-
-    const bulletGeo = new THREE.SphereGeometry(0.05, 8, 8);
-    const bulletMat = new THREE.MeshStandardMaterial({color: 0xffff00});
-    const bullet = new THREE.Mesh(bulletGeo, bulletMat);
-    bullet.position.copy(camera.position);
-    const dir = new THREE.Vector3();
-    camera.getWorldDirection(dir);
-    bullet.velocity = dir.multiplyScalar(1);
-    bullet.isPlayerBullet = true;
-    bullet.lifetime = 200; // frames
-    scene.add(bullet);
-    bullets.push(bullet);
-
-    if(ammo <= 0) reloadGun();
-  }
-
-  // Reload gun
-  function reloadGun(){
-    if(reloading) return;
-    reloading = true;
-    sounds.reload.play();
-    setTimeout(() => {
-      ammo = maxAmmo;
-      updateAmmoUI();
-      reloading = false;
-    }, 2000);
-  }
-
-  // Update health UI
-  function updateHealthUI(){
-    healthText.textContent = Math.floor(health);
-    const healthPercent = (health/maxHealth)*100;
-    healthBar.style.width = healthPercent + '%';
-  }
-
-  // Update ammo UI
-  function updateAmmoUI(){
-    bulletCountText.textContent = ammo;
-  }
-
-  // Bot shooting function
-  function botShoot(bot){
-    if(!bot.alive || paused) return;
-    const now = performance.now();
-    if(now - bot.lastShootTime < 1000 + Math.random()*1500) return; // random delay between shots
-
-    // Check if player visible (simple distance and line of sight)
-    const playerPos = controls.getObject().position;
-    if(bot.position.distanceTo(playerPos) > 30) return; // too far
-    if(!canBotSeePlayer(bot)) return;
-
-    bot.lastShootTime = now;
-    sounds.shoot.play();
-
-    const bulletGeo = new THREE.SphereGeometry(0.05, 8, 8);
-    const bulletMat = new THREE.MeshStandardMaterial({color: 0xff0000});
-    const bullet = new THREE.Mesh(bulletGeo, bulletMat);
-    bullet.position.copy(bot.position).add(new THREE.Vector3(0,1,0));
-    const dir = new THREE.Vector3().subVectors(playerPos, bot.position).normalize();
-    bullet.velocity = dir.multiplyScalar(0.8);
-    bullet.isPlayerBullet = false;
-    bullet.lifetime = 200;
-    scene.add(bullet);
-    botBullets.push(bullet);
-  }
-
-  // Simple line of sight for bot
-  function canBotSeePlayer(bot){
-    // Raycast from bot to player, check containers blocking line
-    const playerPos = controls.getObject().position.clone();
-    const origin = bot.position.clone();
-    origin.y += 1;
-    playerPos.y += 1;
-    const direction = new THREE.Vector3().subVectors(playerPos, origin).normalize();
-
-    const raycaster = new THREE.Raycaster(origin, direction);
-    const intersects = raycaster.intersectObjects(containers, true);
-    if(intersects.length > 0){
-      const distToObstacle = intersects[0].distance;
-      const distToPlayer = origin.distanceTo(playerPos);
-      if(distToObstacle < distToPlayer - 1) return false;
-    }
-    return true;
-  }
-
-  // Movement & physics update
-  function updateMovement(){
-    if(!controls.isLocked || paused) return;
-
-    const speed = 0.15;
-    let pos = controls.getObject().position.clone();
-
-    let moveVector = new THREE.Vector3();
-
-    if(keys['KeyW']) moveVector.z -= 1;
-    if(keys['KeyS']) moveVector.z += 1;
-    if(keys['KeyA']) moveVector.x -= 1;
-    if(keys['KeyD']) moveVector.x += 1;
-
-    moveVector.normalize();
-    moveVector.applyEuler(camera.rotation);
-
-    let newPos = pos.clone().addScaledVector(moveVector, speed);
-
-    // Collision check
-    if(!isPositionBlocked(newPos)) {
-      controls.getObject().position.copy(newPos);
-    }
-
-    // Gravity and jumping
-    velocityY += gravity;
-    let nextY = controls.getObject().position.y + velocityY;
-    if(nextY < 1.6){
-      nextY = 1.6;
-      velocityY = 0;
-      onGround = true;
-    } else {
-      onGround = false;
-    }
-    controls.getObject().position.y = nextY;
-
-    if(keys['Space'] && onGround){
-      velocityY = 0.3;
-      onGround = false;
-    }
-  }
-
-  // Update bullets positions and check collisions
-  function updateBullets(){
-    // Player bullets
-    for(let i=bullets.length-1; i>=0; i--){
-      const b = bullets[i];
-      b.position.add(b.velocity);
-
-      // Lifetime reduce
-      b.lifetime--;
-      if(b.lifetime <= 0){
-        scene.remove(b);
-        bullets.splice(i,1);
-        continue;
-      }
-
-      // Check collision with bots
-      for(let j=bots.length-1; j>=0; j--){
-        const bot = bots[j];
-        if(bot.health <= 0) continue;
-
-        if(b.position.distanceTo(bot.position) < 1){
-          bot.health -= 25;
-          scene.remove(b);
-          bullets.splice(i,1);
-          if(bot.health <= 0){
-            bot.alive = false;
-            scene.remove(bot);
-            bots.splice(j,1);
-            // Respawn bot after 5 seconds
-            setTimeout(spawnBot, 5000);
-          }
-          break;
-        }
-      }
-    }
-
-    // Bot bullets
-    for(let i=botBullets.length-1; i>=0; i--){
-      const b = botBullets[i];
-      b.position.add(b.velocity);
-
-      b.lifetime--;
-      if(b.lifetime <= 0){
-        scene.remove(b);
-        botBullets.splice(i,1);
-        continue;
-      }
-
-      // Check collision with player
-      if(b.position.distanceTo(controls.getObject().position) < 1){
-        health -= 10;
-        updateHealthUI();
-        sounds.damage.play();
-        scene.remove(b);
-        botBullets.splice(i,1);
-        if(health <= 0){
-          sounds.death.play();
-          respawnPlayer();
-        }
-      }
-    }
-  }
-
-  // Bot AI movement towards player
-  function updateBots(){
-    const playerPos = controls.getObject().position;
-    for(let bot of bots){
-      if(!bot.alive) continue;
-
-      // Move towards player slowly
-      let dir = new THREE.Vector3().subVectors(playerPos, bot.position);
-      dir.y = 0; // keep bot on ground
-      if(dir.length() > 5){
-        dir.normalize();
-        let newPos = bot.position.clone().add(dir.multiplyScalar(0.05));
-        if(!isPositionBlocked(newPos)) bot.position.copy(newPos);
-      }
-
-      // Shoot at player
-      botShoot(bot);
-    }
-  }
-
-  // Window resize handler
-  function onWindowResize(){
-    camera.aspect = window.innerWidth/window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-  }
-
-  // Pause toggle
-  function togglePause(){
-    paused = !paused;
-    if(paused){
-      controls.unlock();
-      pauseMenu.style.display = 'flex';
-      hud.style.display = 'none';
-      document.exitPointerLock();
-    } else {
-      pauseMenu.style.display = 'none';
+    document.getElementById('play-btn').onclick = () => {
+      mainMenu.style.display = 'none';
       hud.style.display = 'block';
-      canvas.focus();
+      crosshair.style.display = 'block';
+      initGame();
+    };
+
+    document.getElementById('resume-btn').onclick = () => {
+      pauseMenu.style.display = 'none';
+      isPaused = false;
+      controls.lock();
+    };
+
+    function initGame() {
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+      renderer = new THREE.WebGLRenderer({ canvas });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      clock = new THREE.Clock();
+
+      controls = new THREE.PointerLockControls(camera, document.body);
+      scene.add(controls.getObject());
+
+      document.body.addEventListener('click', () => {
+        if (!controls.isLocked && !isPaused) controls.lock();
+      });
+
+      // Pause menu on ESC
+      document.addEventListener('keydown', e => {
+        if (e.code === 'Escape') {
+          isPaused = true;
+          pauseMenu.style.display = 'flex';
+          controls.unlock();
+        }
+        keys[e.code] = true;
+      });
+
+      document.addEventListener('keyup', e => keys[e.code] = false);
+      document.addEventListener('mousedown', () => shoot());
+      document.addEventListener('keydown', e => {
+        if (e.code === 'KeyR') reload();
+      });
+
+      // Lighting
+      scene.add(new THREE.AmbientLight(0x999999));
+      const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
+      dirLight.position.set(5, 10, 7);
+      scene.add(dirLight);
+
+      // Ground
+      const groundMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
+      const ground = new THREE.Mesh(new THREE.PlaneGeometry(100, 100), groundMat);
+      ground.rotation.x = -Math.PI / 2;
+      scene.add(ground);
+
+      // Map containers
+      const boxMat = new THREE.MeshStandardMaterial({ color: 0x8888ff });
+      for (let i = 0; i < 30; i++) {
+        const box = new THREE.Mesh(new THREE.BoxGeometry(4, 4, 8), boxMat);
+        box.position.set((Math.random() - 0.5) * 80, 2, (Math.random() - 0.5) * 80);
+        scene.add(box);
+        map.push(box);
+      }
+
+      // Player start position
+      controls.getObject().position.set(0, 2, 0);
+
+      spawnBots();
+      animate();
     }
-  }
 
-  // Restart game
-  restartBtn.onclick = () => {
-    pauseMenu.style.display = 'none';
-    hud.style.display = 'block';
-    paused = false;
-    respawnPlayer();
-  };
+    function spawnBots() {
+      for (let i = 0; i < 5; i++) spawnBot();
+    }
 
-  resumeBtn.onclick = () => {
-    togglePause();
-  };
+    function spawnBot() {
+      const bot = new THREE.Mesh(new THREE.CapsuleGeometry(0.5, 1.5, 4, 8), new THREE.MeshStandardMaterial({ color: 0xaa0000 }));
+      bot.position.set((Math.random() - 0.5) * 80, 2, (Math.random() - 0.5) * 80);
+      bot.health = 100;
+      scene.add(bot);
+      bots.push(bot);
+    }
 
-  // Main game loop
-  function animate(){
-    requestAnimationFrame(animate);
-    if(!paused && controls.isLocked){
+    function shoot() {
+      if (!controls.isLocked || !canShoot || ammo <= 0) return;
+      ammo--;
+      ammoText.textContent = ammo;
+      canShoot = false;
+      setTimeout(() => canShoot = true, 300);
+
+      const bullet = new THREE.Mesh(new THREE.SphereGeometry(0.1), new THREE.MeshStandardMaterial({ color: 0xffff00 }));
+      bullet.position.copy(camera.position);
+      const dir = new THREE.Vector3();
+      camera.getWorldDirection(dir);
+      bullet.velocity = dir.multiplyScalar(2);
+      scene.add(bullet);
+      bullets.push(bullet);
+    }
+
+    function reload() {
+      ammo = maxAmmo;
+      ammoText.textContent = ammo;
+    }
+
+    function updateBullets() {
+      bullets.forEach((b, i) => {
+        b.position.add(b.velocity);
+        bots.forEach((bot, j) => {
+          if (bot.position.distanceTo(b.position) < 1) {
+            bot.health -= 50;
+            scene.remove(b);
+            bullets.splice(i, 1);
+            if (bot.health <= 0) {
+              scene.remove(bot);
+              bots.splice(j, 1);
+              setTimeout(spawnBot, 5000);
+            }
+          }
+        });
+      });
+    }
+
+    function updateBots() {
+      bots.forEach(bot => {
+        if (bot.health <= 0) return;
+        const playerPos = controls.getObject().position;
+        const dir = new THREE.Vector3().subVectors(playerPos, bot.position).normalize();
+        bot.position.add(dir.multiplyScalar(0.02));
+
+        if (Math.random() < 0.01 && bot.position.distanceTo(playerPos) < 15) {
+          health -= 5;
+          if (health <= 0) {
+            health = 100;
+            controls.getObject().position.set(0, 2, 0);
+          }
+          healthText.textContent = health;
+        }
+      });
+    }
+
+    function updateMovement() {
+      if (!controls.isLocked) return;
+      const speed = 0.15;
+      if (keys['KeyW']) controls.moveForward(speed);
+      if (keys['KeyS']) controls.moveForward(-speed);
+      if (keys['KeyA']) controls.moveRight(-speed);
+      if (keys['KeyD']) controls.moveRight(speed);
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      if (isPaused) return;
       updateMovement();
       updateBullets();
       updateBots();
+      renderer.render(scene, camera);
     }
-    renderer.render(scene, camera);
-  }
 
-  // Start everything
-  init();
-  animate();
-
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
   </script>
 </body>
 </html>
