@@ -3,485 +3,554 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Shooter Game with AI, Maps, Menus, Respawn</title>
+<title>Emu.io</title>
 <style>
-  /* Reset & basic styling */
   * {
     box-sizing: border-box;
   }
   body, html {
     margin: 0; padding: 0;
+    height: 100%;
+    background: #121212;
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: #222;
     color: #eee;
     overflow: hidden;
   }
+  #mainMenu {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: linear-gradient(135deg, #1a1a1a, #222);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 30px;
+    z-index: 1000;
+  }
+  #mainMenu h1 {
+    font-size: 4rem;
+    letter-spacing: 6px;
+    margin: 0;
+    color: #ff5555;
+    text-shadow: 0 0 10px #ff4444;
+  }
+  .btn {
+    background: #333;
+    border: 2px solid #ff5555;
+    padding: 15px 30px;
+    font-size: 1.5rem;
+    cursor: pointer;
+    border-radius: 10px;
+    transition: background 0.3s, color 0.3s;
+    user-select: none;
+    min-width: 200px;
+  }
+  .btn:hover {
+    background: #ff4444;
+    color: #fff;
+  }
+  #mapSelect {
+    display: flex;
+    gap: 20px;
+  }
+  #mapSelect .btn {
+    min-width: 120px;
+    font-size: 1.2rem;
+  }
+  #gameUI {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    width: 220px;
+    user-select: none;
+    z-index: 900;
+  }
+  #healthBarContainer {
+    width: 100%;
+    height: 30px;
+    background: #440000;
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: 0 0 10px #660000;
+  }
+  #healthBar {
+    height: 100%;
+    background: #ff2222;
+    width: 100%;
+    transition: width 0.3s ease;
+  }
+  #healthText {
+    margin-top: 4px;
+    font-size: 1.2rem;
+    text-align: center;
+    font-weight: bold;
+    color: #ffcccc;
+    text-shadow: 0 0 3px #660000;
+  }
+  #pauseMenu {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(0,0,0,0.85);
+    display: none;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 30px;
+    z-index: 1100;
+  }
+  #pauseMenu.active {
+    display: flex;
+  }
+  #pauseMenu h2 {
+    font-size: 3rem;
+    color: #ff5555;
+    text-shadow: 0 0 10px #ff4444;
+    margin: 0;
+  }
   canvas {
     display: block;
-    background: #111;
     margin: 0 auto;
-    border: 1px solid #555;
+    background: #222;
+    border-radius: 10px;
   }
-
-  /* Main menu styling */
-  #main-menu, #pause-menu {
-    position: absolute;
-    top: 50%; left: 50%;
-    transform: translate(-50%, -50%);
-    background: #2c2c2c;
-    padding: 30px 40px;
-    border-radius: 8px;
-    box-shadow: 0 0 15px rgba(0,0,0,0.7);
-    text-align: center;
-    width: 320px;
-    display: none;
-  }
-  #main-menu.active, #pause-menu.active {
-    display: block;
-  }
-  h1 {
-    margin-bottom: 20px;
-    font-weight: 700;
-    font-size: 28px;
-  }
-  button {
-    background: #444;
-    border: none;
-    padding: 12px 18px;
-    margin: 10px 0;
-    width: 100%;
-    color: #eee;
-    font-size: 16px;
-    border-radius: 5px;
-    cursor: pointer;
-    transition: background 0.25s;
-  }
-  button:hover {
-    background: #666;
-  }
-
-  /* Info text */
-  #info {
-    position: absolute;
-    top: 8px; left: 50%;
-    transform: translateX(-50%);
-    font-size: 14px;
-    color: #ccc;
-    user-select: none;
-  }
-
 </style>
 </head>
 <body>
 
-<!-- Canvas for game -->
-<canvas id="gameCanvas" width="800" height="450"></canvas>
-
 <!-- Main Menu -->
-<div id="main-menu" class="active">
-  <h1>Select a Map</h1>
-  <button data-map="0">Map 1: Open Field</button>
-  <button data-map="1">Map 2: Maze</button>
-  <button data-map="2">Map 3: Platforms</button>
+<div id="mainMenu" class="active">
+  <h1>Emu.io</h1>
+  <div id="mapSelect">
+    <button class="btn" data-map="0">Arena</button>
+    <button class="btn" data-map="1">Desert</button>
+    <button class="btn" data-map="2">Snow</button>
+  </div>
+</div>
+
+<!-- Game UI -->
+<div id="gameUI" style="display:none;">
+  <div id="healthBarContainer">
+    <div id="healthBar"></div>
+  </div>
+  <div id="healthText">Health: 100</div>
 </div>
 
 <!-- Pause Menu -->
-<div id="pause-menu">
-  <h1>Paused</h1>
-  <button id="resume-btn">Resume</button>
-  <button id="back-main-btn">Back to Main Menu</button>
+<div id="pauseMenu">
+  <h2>Paused</h2>
+  <button class="btn" id="resumeBtn">Resume</button>
+  <button class="btn" id="mainMenuBtn">Main Menu</button>
 </div>
 
-<!-- Info -->
-<div id="info">Use WASD to move, mouse to aim and shoot</div>
+<!-- Canvas -->
+<canvas id="gameCanvas" width="960" height="540" tabindex="0"></canvas>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/controls/PointerLockControls.js"></script>
 
 <script>
-// Get elements
-const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
-const mainMenu = document.getElementById('main-menu');
-const pauseMenu = document.getElementById('pause-menu');
-const resumeBtn = document.getElementById('resume-btn');
-const backMainBtn = document.getElementById('back-main-btn');
-const mapButtons = mainMenu.querySelectorAll('button[data-map]');
+(() => {
+  const canvas = document.getElementById('gameCanvas');
+  const healthBar = document.getElementById('healthBar');
+  const healthText = document.getElementById('healthText');
+  const mainMenu = document.getElementById('mainMenu');
+  const pauseMenu = document.getElementById('pauseMenu');
+  const resumeBtn = document.getElementById('resumeBtn');
+  const mainMenuBtn = document.getElementById('mainMenuBtn');
+  const mapButtons = document.querySelectorAll('#mapSelect .btn');
+  const gameUI = document.getElementById('gameUI');
 
-const WIDTH = canvas.width;
-const HEIGHT = canvas.height;
+  let scene, camera, renderer, controls;
+  let player, playerVelocity = new THREE.Vector3();
+  let enemies = [];
+  let bullets = [];
+  let enemyBullets = [];
+  let clock = new THREE.Clock();
+  let keys = {};
+  let health = 100;
+  let isPaused = false;
+  let currentMap = null;
 
-let gameState = 'menu'; // 'menu', 'playing', 'paused'
+  // Maps definition
+  const maps = [
+    {
+      name: 'Arena',
+      size: 60,
+      color: 0x303030
+    },
+    {
+      name: 'Desert',
+      size: 100,
+      color: 0x8B7E66
+    },
+    {
+      name: 'Snow',
+      size: 80,
+      color: 0xBFE3F8
+    }
+  ];
 
-/* ===== Game Variables ===== */
-let keys = {};
-let mouse = { x: 0, y: 0, down: false };
+  // --- Initialize scene & player ---
+  function init(mapIndex) {
+    // Cleanup if restarting
+    if(renderer) {
+      renderer.dispose();
+      renderer.domElement.remove();
+      scene = null;
+      camera = null;
+      controls = null;
+      enemies = [];
+      bullets = [];
+      enemyBullets = [];
+    }
 
-const PLAYER_SIZE = 20;
-const PLAYER_SPEED = 3;
+    scene = new THREE.Scene();
 
-const BULLET_SPEED = 8;
-const ENEMY_BULLET_SPEED = 4;
-const ENEMY_SPEED = 1.5;
-const ENEMY_SHOOT_INTERVAL_MIN = 1200; // min ms between enemy shots
-const ENEMY_SHOOT_INTERVAL_MAX = 3000; // max ms between enemy shots
+    currentMap = maps[mapIndex] || maps[0];
 
-// Maps (each map defines walls/platforms)
-const maps = [
-  {
-    name: "Open Field",
-    walls: []
-  },
-  {
-    name: "Maze",
-    walls: [
-      {x: 100, y: 50, w: 600, h: 20},
-      {x: 100, y: 380, w: 600, h: 20},
-      {x: 100, y: 50, w: 20, h: 350},
-      {x: 680, y: 50, w: 20, h: 350},
-      // inner walls for maze
-      {x: 200, y: 120, w: 20, h: 250},
-      {x: 300, y: 50, w: 20, h: 250},
-      {x: 400, y: 150, w: 20, h: 250},
-      {x: 500, y: 50, w: 20, h: 250},
-      {x: 600, y: 150, w: 20, h: 250},
-    ]
-  },
-  {
-    name: "Platforms",
-    walls: [
-      {x: 0, y: 400, w: 800, h: 20},
-      {x: 100, y: 320, w: 150, h: 20},
-      {x: 300, y: 240, w: 150, h: 20},
-      {x: 550, y: 300, w: 150, h: 20},
-      {x: 200, y: 150, w: 150, h: 20},
-    ]
-  }
-];
+    // Floor
+    const floorGeometry = new THREE.PlaneGeometry(currentMap.size, currentMap.size);
+    const floorMaterial = new THREE.MeshPhongMaterial({ color: currentMap.color });
+    const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+    floor.rotation.x = -Math.PI / 2;
+    floor.receiveShadow = true;
+    scene.add(floor);
 
-// Game objects
-let player, enemies, bullets, enemyBullets, currentMap;
+    // Lights
+    const ambientLight = new THREE.AmbientLight(0xaaaaaa);
+    scene.add(ambientLight);
 
-function createPlayer() {
-  return {
-    x: WIDTH / 2,
-    y: HEIGHT - 50,
-    w: PLAYER_SIZE,
-    h: PLAYER_SIZE,
-    speed: PLAYER_SPEED,
-    alive: true,
-    respawnCooldown: 0
-  };
-}
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    directionalLight.position.set(20, 40, 20);
+    directionalLight.castShadow = true;
+    scene.add(directionalLight);
 
-function createEnemy(x, y) {
-  return {
-    x, y,
-    w: PLAYER_SIZE,
-    h: PLAYER_SIZE,
-    speed: ENEMY_SPEED,
-    lastShootTime: 0,
-    nextShootDelay: randomRange(ENEMY_SHOOT_INTERVAL_MIN, ENEMY_SHOOT_INTERVAL_MAX)
-  };
-}
+    // Player camera and controls
+    camera = new THREE.PerspectiveCamera(75, canvas.clientWidth / canvas.clientHeight, 0.1, 1000);
+    controls = new THREE.PointerLockControls(camera, document.body);
 
-function randomRange(min, max) {
-  return Math.random() * (max - min) + min;
-}
+    // Add player object for collision detection (invisible)
+    player = new THREE.Object3D();
+    player.position.set(0, 1.5, 0);
+    scene.add(player);
 
-function rectsCollide(a, b) {
-  return !(a.x + a.w < b.x || a.x > b.x + b.w || a.y + a.h < b.y || a.y > b.y + b.h);
-}
+    camera.position.set(0, 1.5, 0);
+    player.add(camera);
 
-// Initialize game with chosen map
-function startGame(mapIndex) {
-  currentMap = maps[mapIndex];
-  player = createPlayer();
-  enemies = [];
+    // Renderer setup
+    if(!renderer) {
+      renderer = new THREE.WebGLRenderer({ canvas });
+      renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+      renderer.shadowMap.enabled = true;
+    }
 
-  // Spawn enemies depending on map
-  if(mapIndex === 0) {
-    enemies.push(createEnemy(100, 100));
-    enemies.push(createEnemy(700, 100));
-  } else if(mapIndex === 1) {
-    enemies.push(createEnemy(150, 100));
-    enemies.push(createEnemy(650, 300));
-    enemies.push(createEnemy(400, 200));
-  } else if(mapIndex === 2) {
-    enemies.push(createEnemy(150, 270));
-    enemies.push(createEnemy(400, 190));
-    enemies.push(createEnemy(600, 260));
-  }
+    // Setup event listeners for pointer lock
+    canvas.onclick = () => {
+      if (!controls.isLocked) {
+        controls.lock();
+      }
+    };
 
-  bullets = [];
-  enemyBullets = [];
-  gameState = 'playing';
+    controls.addEventListener('lock', () => {
+      console.log('Pointer locked');
+      canvas.style.cursor = 'none';
+    });
 
-  mainMenu.classList.remove('active');
-  pauseMenu.classList.remove('active');
+    controls.addEventListener('unlock', () => {
+      console.log('Pointer unlocked');
+      canvas.style.cursor = 'default';
+      pauseGame();
+    });
 
-  // Reset input states
-  keys = {};
-  mouse.down = false;
-}
+    // Spawn enemies
+    spawnEnemies(12);
 
-// Handle player movement with WASD and collision with walls
-function movePlayer() {
-  if (!player.alive) return;
+    health = 100;
+    updateHealthUI();
 
-  let dx = 0, dy = 0;
-  if (keys['KeyW']) dy -= player.speed;
-  if (keys['KeyS']) dy += player.speed;
-  if (keys['KeyA']) dx -= player.speed;
-  if (keys['KeyD']) dx += player.speed;
+    gameUI.style.display = 'block';
 
-  // Move and collide with walls
-  tryMove(player, dx, dy);
-}
+    animate();
 
-// Try move entity and collide with walls
-function tryMove(entity, dx, dy) {
-  if (dx === 0 && dy === 0) return;
-
-  // Move X then check collisions
-  entity.x += dx;
-  if (collidesWithWalls(entity)) {
-    entity.x -= dx;
-  }
-  // Move Y then check collisions
-  entity.y += dy;
-  if (collidesWithWalls(entity)) {
-    entity.y -= dy;
+    canvas.focus();
   }
 
-  // Keep inside canvas
-  entity.x = Math.min(Math.max(0, entity.x), WIDTH - entity.w);
-  entity.y = Math.min(Math.max(0, entity.y), HEIGHT - entity.h);
-}
+  // --- Spawn enemies ---
+  function spawnEnemies(amount) {
+    for(let i = 0; i < amount; i++) {
+      const enemy = createEnemy();
+      enemies.push(enemy);
+      scene.add(enemy.mesh);
+    }
+  }
 
-function collidesWithWalls(entity) {
-  return currentMap.walls.some(wall => rectsCollide(entity, wall));
-}
+  // --- Enemy factory ---
+  function createEnemy() {
+    const geometry = new THREE.BoxGeometry(1, 2, 1);
+    const material = new THREE.MeshPhongMaterial({ color: 0x222222 });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.castShadow = true;
+    mesh.position.set(
+      (Math.random() - 0.5) * currentMap.size * 0.8,
+      1,
+      (Math.random() - 0.5) * currentMap.size * 0.8
+    );
+    return {
+      mesh,
+      health: 50,
+      shootCooldown: Math.random() * 3 + 2, // seconds
+      shootTimer: 0,
+      speed: 2,
+      shoot() {
+        if (!controls.isLocked) return; // Don't shoot if player not focused
+        if (this.shootTimer <= 0) {
+          if (Math.random() < 0.5) { // 50% chance to shoot
+            const bullet = createBullet(this.mesh.position, player.position, false);
+            enemyBullets.push(bullet);
+            scene.add(bullet.mesh);
+            this.shootTimer = this.shootCooldown;
+          }
+        }
+      },
+      update(delta) {
+        // Simple AI: move towards player slowly
+        const dir = new THREE.Vector3().subVectors(player.position, this.mesh.position);
+        dir.y = 0;
+        if (dir.length() > 2) {
+          dir.normalize();
+          this.mesh.position.addScaledVector(dir, this.speed * delta);
+        }
+        // Shoot logic
+        this.shootTimer -= delta;
+        this.shoot();
+      }
+    };
+  }
 
-// Create a bullet object
-function createBullet(x, y, vx, vy, fromEnemy = false) {
-  return { x, y, vx, vy, w: 6, h: 6, fromEnemy };
-}
+  // --- Bullet factory ---
+  function createBullet(startPos, targetPos, isPlayerBullet = true) {
+    const geometry = new THREE.SphereGeometry(0.1, 8, 8);
+    const material = new THREE.MeshBasicMaterial({ color: isPlayerBullet ? 0xffff00 : 0xff0000 });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.copy(startPos);
 
-// Update bullets position and remove off-screen
-function updateBullets() {
-  bullets = bullets.filter(b => {
-    b.x += b.vx;
-    b.y += b.vy;
+    const velocity = new THREE.Vector3().subVectors(targetPos, startPos).normalize().multiplyScalar(20);
 
-    // Remove if out of screen
-    if (b.x < -10 || b.x > WIDTH + 10 || b.y < -10 || b.y > HEIGHT + 10) return false;
+    return {
+      mesh,
+      velocity,
+      isPlayerBullet,
+      lifeTime: 3, // seconds
+      update(delta) {
+        mesh.position.addScaledVector(this.velocity, delta);
+        this.lifeTime -= delta;
+      }
+    };
+  }
 
-    // Check collision with enemies (if from player)
-    if (!b.fromEnemy) {
-      for (let i = 0; i < enemies.length; i++) {
-        if (rectsCollide(b, enemies[i])) {
-          enemies.splice(i, 1);
-          return false;
+  // --- Keyboard Input ---
+  window.addEventListener('keydown', (e) => {
+    keys[e.code] = true;
+
+    // Pause menu toggle
+    if(e.code === 'Escape') {
+      if (isPaused) {
+        resumeGame();
+      } else {
+        pauseGame();
+      }
+    }
+  });
+  window.addEventListener('keyup', (e) => {
+    keys[e.code] = false;
+  });
+
+  // --- Player movement ---
+  function updatePlayer(delta) {
+    if (!controls.isLocked) return;
+
+    const speed = 8;
+    const direction = new THREE.Vector3();
+    if (keys['KeyW']) direction.z -= 1;
+    if (keys['KeyS']) direction.z += 1;
+    if (keys['KeyA']) direction.x -= 1;
+    if (keys['KeyD']) direction.x += 1;
+
+    if(direction.lengthSq() > 0) {
+      direction.normalize();
+      direction.applyEuler(camera.rotation);
+      player.position.addScaledVector(direction, speed * delta);
+    }
+  }
+
+  // --- Shooting ---
+  let canShoot = true;
+  window.addEventListener('mousedown', () => {
+    if (!controls.isLocked || isPaused) return;
+    if (canShoot) {
+      shootBullet();
+      canShoot = false;
+      setTimeout(() => { canShoot = true; }, 300); // 0.3 sec cooldown
+    }
+  });
+
+  function shootBullet() {
+    const startPos = player.position.clone();
+    startPos.y += 1.5; // gun height
+    const direction = new THREE.Vector3(0, 0, -1).applyEuler(camera.rotation);
+    const targetPos = startPos.clone().add(direction.multiplyScalar(100));
+    const bullet = createBullet(startPos, targetPos, true);
+    bullets.push(bullet);
+    scene.add(bullet.mesh);
+  }
+
+  // --- Health UI update ---
+  function updateHealthUI() {
+    healthBar.style.width = (health) + '%';
+    healthText.textContent = 'Health: ' + Math.floor(health);
+  }
+
+  // --- Game Loop ---
+  function animate() {
+    if (isPaused) {
+      requestAnimationFrame(animate);
+      renderer.render(scene, camera);
+      return;
+    }
+
+    const delta = clock.getDelta();
+
+    updatePlayer(delta);
+
+    // Update enemies
+    enemies.forEach(enemy => {
+      enemy.update(delta);
+    });
+
+    // Update bullets
+    bullets.forEach((b, i) => {
+      b.update(delta);
+      // Remove bullets past lifetime or far away
+      if (b.lifeTime <= 0 || b.mesh.position.distanceTo(player.position) > 200) {
+        scene.remove(b.mesh);
+        bullets.splice(i, 1);
+        return;
+      }
+      // Check collision with enemies (player bullets)
+      if (b.isPlayerBullet) {
+        enemies.forEach((enemy, idx) => {
+          if (enemy.mesh.position.distanceTo(b.mesh.position) < 1) {
+            enemy.health -= 20;
+            scene.remove(b.mesh);
+            bullets.splice(i,1);
+            if(enemy.health <= 0) {
+              scene.remove(enemy.mesh);
+              enemies.splice(idx, 1);
+            }
+          }
+        });
+      }
+    });
+
+    // Update enemy bullets
+    enemyBullets.forEach((b, i) => {
+      b.update(delta);
+      // Remove bullets past lifetime or far away
+      if (b.lifeTime <= 0 || b.mesh.position.distanceTo(player.position) > 200) {
+        scene.remove(b.mesh);
+        enemyBullets.splice(i, 1);
+        return;
+      }
+      // Check collision with player
+      if (!b.isPlayerBullet) {
+        if (b.mesh.position.distanceTo(player.position) < 1) {
+          health -= 10;
+          updateHealthUI();
+          scene.remove(b.mesh);
+          enemyBullets.splice(i, 1);
+          if(health <= 0) {
+            respawnPlayer();
+          }
         }
       }
-    } else {
-      // If from enemy, check collision with player
-      if (player.alive && rectsCollide(b, player)) {
-        player.alive = false;
-        player.respawnCooldown = 120; // frames to wait before respawn (~2 seconds at 60fps)
-        return false;
-      }
-    }
-    return true;
-  });
+    });
 
-  enemyBullets = enemyBullets.filter(b => {
-    b.x += b.vx;
-    b.y += b.vy;
-
-    // Remove if out of screen
-    if (b.x < -10 || b.x > WIDTH + 10 || b.y < -10 || b.y > HEIGHT + 10) return false;
-
-    // Enemy bullets handled in bullets array already (to avoid duplication)
-    return true;
-  });
-}
-
-// Update enemies (move towards player slowly, and shoot randomly with delay)
-function updateEnemies() {
-  enemies.forEach(enemy => {
-    // Move toward player (basic)
-    let dx = player.x - enemy.x;
-    let dy = player.y - enemy.y;
-    let dist = Math.hypot(dx, dy);
-    if (dist > 0) {
-      let vx = (dx / dist) * enemy.speed;
-      let vy = (dy / dist) * enemy.speed;
-
-      tryMove(enemy, vx, vy);
-    }
-
-    // Shoot randomly based on time
-    enemy.lastShootTime += 16.67; // approx frame time in ms
-
-    if (enemy.lastShootTime >= enemy.nextShootDelay) {
-      enemy.lastShootTime = 0;
-      enemy.nextShootDelay = randomRange(ENEMY_SHOOT_INTERVAL_MIN, ENEMY_SHOOT_INTERVAL_MAX);
-
-      // Shoot toward player with some randomness in direction
-      let angle = Math.atan2(player.y - enemy.y, player.x - enemy.x);
-      let spread = (Math.random() - 0.5) * 0.4; // +/- 0.2 radians randomness
-      let vx = Math.cos(angle + spread) * ENEMY_BULLET_SPEED;
-      let vy = Math.sin(angle + spread) * ENEMY_BULLET_SPEED;
-      bullets.push(createBullet(enemy.x + enemy.w / 2, enemy.y + enemy.h / 2, vx, vy, true));
-    }
-  });
-}
-
-// Player shooting
-function playerShoot() {
-  if (!player.alive) return;
-  if (!mouse.down) return;
-
-  // Limit fire rate
-  if (!player.lastShootTime) player.lastShootTime = 0;
-  player.lastShootTime += 16.67;
-
-  if (player.lastShootTime >= 200) { // 200ms between shots
-    player.lastShootTime = 0;
-
-    let angle = Math.atan2(mouse.y - player.y, mouse.x - player.x);
-    let vx = Math.cos(angle) * BULLET_SPEED;
-    let vy = Math.sin(angle) * BULLET_SPEED;
-
-    bullets.push(createBullet(player.x + player.w / 2, player.y + player.h / 2, vx, vy));
-  }
-}
-
-// Respawn logic
-function handleRespawn() {
-  if (!player.alive) {
-    player.respawnCooldown--;
-    if (player.respawnCooldown <= 0) {
-      player.x = WIDTH / 2;
-      player.y = HEIGHT - 50;
-      player.alive = true;
-      player.respawnCooldown = 0;
-    }
-  }
-}
-
-// Draw functions
-function drawRect(obj, color) {
-  ctx.fillStyle = color;
-  ctx.fillRect(obj.x, obj.y, obj.w, obj.h);
-}
-
-function draw() {
-  ctx.clearRect(0, 0, WIDTH, HEIGHT);
-
-  // Draw walls
-  ctx.fillStyle = '#555';
-  currentMap.walls.forEach(wall => {
-    ctx.fillRect(wall.x, wall.y, wall.w, wall.h);
-  });
-
-  // Draw player
-  if (player.alive) {
-    drawRect(player, '#4CAF50');
-  } else {
-    // Draw respawn timer
-    ctx.fillStyle = '#ff4444';
-    ctx.font = '20px Arial';
-    ctx.textAlign = 'center';
-    ctx.fillText('Respawning...', WIDTH / 2, HEIGHT / 2);
+    renderer.render(scene, camera);
+    requestAnimationFrame(animate);
   }
 
-  // Draw enemies
-  enemies.forEach(e => drawRect(e, '#e53935'));
-
-  // Draw bullets
-  bullets.forEach(b => drawRect(b, b.fromEnemy ? '#ff5722' : '#03A9F4'));
-}
-
-// Game Loop
-function gameLoop() {
-  if (gameState === 'playing') {
-    movePlayer();
-    playerShoot();
-    updateBullets();
-    updateEnemies();
-    handleRespawn();
+  // --- Pause & Resume ---
+  function pauseGame() {
+    if (isPaused) return;
+    isPaused = true;
+    pauseMenu.classList.add('active');
+    controls.unlock();
+    canvas.style.cursor = 'default';
   }
-  draw();
-  requestAnimationFrame(gameLoop);
-}
-
-// Input handlers
-window.addEventListener('keydown', e => {
-  if (gameState === 'playing') {
-    keys[e.code] = true;
-    if (e.code === 'Escape') {
-      pauseGame();
-    }
-  } else if (gameState === 'paused') {
-    if (e.code === 'Escape') {
-      resumeGame();
-    }
+  function resumeGame() {
+    if (!isPaused) return;
+    isPaused = false;
+    pauseMenu.classList.remove('active');
+    controls.lock();
+    canvas.style.cursor = 'none';
   }
-});
-window.addEventListener('keyup', e => {
-  keys[e.code] = false;
-});
-canvas.addEventListener('mousedown', e => {
-  mouse.down = true;
-});
-canvas.addEventListener('mouseup', e => {
-  mouse.down = false;
-});
-canvas.addEventListener('mousemove', e => {
-  // Get mouse position relative to canvas
-  const rect = canvas.getBoundingClientRect();
-  mouse.x = e.clientX - rect.left;
-  mouse.y = e.clientY - rect.top;
-});
 
-// Pause & Resume
-function pauseGame() {
-  if (gameState !== 'playing') return;
-  gameState = 'paused';
-  pauseMenu.classList.add('active');
-}
-function resumeGame() {
-  if (gameState !== 'paused') return;
-  gameState = 'playing';
-  pauseMenu.classList.remove('active');
-}
-
-// Back to main menu
-backMainBtn.onclick = () => {
-  gameState = 'menu';
-  mainMenu.classList.add('active');
-  pauseMenu.classList.remove('active');
-};
-
-// Resume button
-resumeBtn.onclick = () => {
-  resumeGame();
-};
-
-// Main menu map selection buttons
-mapButtons.forEach(btn => {
-  btn.onclick = () => {
-    let mapIndex = Number(btn.getAttribute('data-map'));
-    startGame(mapIndex);
+  resumeBtn.onclick = () => {
+    resumeGame();
   };
-});
 
-// Start with main menu visible
-mainMenu.classList.add('active');
-pauseMenu.classList.remove('active');
+  mainMenuBtn.onclick = () => {
+    pauseMenu.classList.remove('active');
+    gameUI.style.display = 'none';
+    mainMenu.classList.add('active');
+  };
 
-gameLoop();
+  // --- Respawn player ---
+  function respawnPlayer() {
+    console.log('Player died. Respawning...');
+    health = 100;
+    updateHealthUI();
+    // Reset player position
+    player.position.set(0, 1.5, 0);
+  }
 
+  // --- Start Game ---
+  function startGame(mapIndex) {
+    console.log('Map selected:', mapIndex);
+    mainMenu.classList.remove('active');
+    gameUI.style.display = 'block';
+    init(mapIndex);
+    canvas.focus();
+  }
+
+  // --- Setup map buttons ---
+  mapButtons.forEach(btn => {
+    btn.onclick = () => {
+      let mapIndex = Number(btn.getAttribute('data-map'));
+      startGame(mapIndex);
+    };
+  });
+
+  // Resize canvas & renderer on window resize
+  function onWindowResize() {
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    canvas.width = w;
+    canvas.height = h;
+    if(renderer) {
+      renderer.setSize(w, h);
+    }
+    if(camera) {
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+    }
+  }
+  window.addEventListener('resize', onWindowResize);
+  onWindowResize();
+
+})();
 </script>
 
 </body>
