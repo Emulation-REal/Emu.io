@@ -63,7 +63,9 @@
   <div id="hud">Health: <span id="health-text">100</span></div>
   <canvas id="game-canvas" tabindex="0"></canvas>
 
+  <!-- Three.js core -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.157.0/build/three.min.js"></script>
+  <!-- PointerLockControls that attaches to THREE -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.157.0/examples/js/controls/PointerLockControls.js"></script>
 
   <script>
@@ -115,14 +117,13 @@
       scene.add(ground);
 
       // Controls
-      controls = new THREE.PointerLockControls(camera, canvas);
+      controls = new THREE.PointerLockControls(camera, document.body);
+      scene.add(controls.getObject());
 
       // Pointer lock request on canvas click (IMPORTANT!)
       canvas.addEventListener('click', () => {
         if (!controls.isLocked) controls.lock();
       });
-
-      scene.add(controls.getObject());
 
       // Gun (simple box)
       const gunGeo = new THREE.BoxGeometry(0.3, 0.2, 1);
