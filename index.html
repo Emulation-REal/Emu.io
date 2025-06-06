@@ -10,6 +10,7 @@
       overflow: hidden;
       font-family: "Segoe UI", sans-serif;
       background: #000;
+      height: 100%;
     }
     canvas {
       display: block;
@@ -100,11 +101,13 @@
     const returnToMenuBtn = document.getElementById('returnToMenu');
 
     let scene, camera, renderer, controls, clock;
-    let bullets = [], enemies = [];
+    let bullets = [], enemies = [], crates = [];
     let health = 100, ammo = 10, maxAmmo = 10;
     let isPaused = false;
-    let player, gun;
-    let lastShotTime = 0;
+    let velocity = new THREE.Vector3();
+    let direction = new THREE.Vector3();
+    let canJump = false;
+    let prevTime = performance.now();
 
     const keys = {};
 
@@ -124,9 +127,11 @@
 
     window.addEventListener('keydown', e => {
       if (e.code === 'Escape') {
-        isPaused = true;
-        pauseMenu.style.display = 'flex';
-        controls.unlock();
+        if (!isPaused) {
+          isPaused = true;
+          pauseMenu.style.display = 'flex';
+          controls.unlock();
+        }
       }
       keys[e.code] = true;
     });
@@ -135,11 +140,14 @@
 
     function init() {
       scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x000000);
+
       camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
       camera.position.y = 1.6;
 
       renderer = new THREE.WebGLRenderer({ canvas });
       renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.shadowMap.enabled = true;
 
       clock = new THREE.Clock();
 
@@ -147,26 +155,45 @@
       const ambient = new THREE.AmbientLight(0x888888);
       const dir = new THREE.DirectionalLight(0xffffff, 1);
       dir.position.set(10, 20, 10);
+      dir.castShadow = true;
+      dir.shadow.mapSize.width = 1024;
+      dir.shadow.mapSize.height = 1024;
       scene.add(ambient, dir);
 
-      // Map (containers)
-      const floor = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.MeshStandardMaterial({ color: 0x333333 }));
+      // Floor
+      const floorMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
+      const floorGeo = new THREE.PlaneGeometry(200, 200);
+      const floor = new THREE.Mesh(floorGeo, floorMat);
       floor.rotation.x = -Math.PI / 2;
+      floor.receiveShadow = true;
       scene.add(floor);
 
-      const crateMat = new THREE.MeshStandardMaterial({ color: 0x4444aa });
-      for (let i = 0; i < 30; i++) {
-        const crate = new THREE.Mesh(new THREE.BoxGeometry(4, 4, 4), crateMat);
-        crate.position.set(
-          Math.random() * 100 - 50,
-          2,
-          Math.random() * 100 - 50
-        );
-        crate.castShadow = true;
-        crate.receiveShadow = true;
-        scene.add(crate);
-      }
+      // Containers map resembling CoD Shipment containers
+      const containerColor = 0xAA7733;
+      const containerMat = new THREE.MeshStandardMaterial({ color: containerColor });
 
+      // Positions for containers, arranged like CoD Shipment map containers in a grid
+      const containerPositions = [
+        [-10, 2, -10], [-10, 2, -2], [-10, 2, 6],
+        [-2, 2, -10], [-2, 2, -2], [-2, 2, 6],
+        [6, 2, -10], [6, 2, -2], [6, 2, 6],
+        [-18, 2, 14], [-10, 2, 14], [-2, 2, 14],
+        [6, 2, 14], [14, 2, 14],
+        [14, 2, 6], [14, 2, -2], [14, 2, -10],
+        [14, 2, -18], [6, 2, -18], [-2, 2, -18],
+        [-10, 2, -18], [-18, 2, -18]
+      ];
+
+      containerPositions.forEach(pos => {
+        const container = new THREE.Mesh(new THREE.BoxGeometry(8, 4, 8), containerMat);
+        container.position.set(pos[0], pos[1], pos[2]);
+        container.castShadow = true;
+        container.receiveShadow = true;
+        scene.add(container);
+        crates.push(container);
+      });
+
+      // Controls
       controls = new THREE.PointerLockControls(camera, document.body);
       scene.add(controls.getObject());
 
@@ -180,21 +207,31 @@
       // Player weapon
       const gunMat = new THREE.MeshStandardMaterial({ color: 0x555555 });
       const gunGeo = new THREE.BoxGeometry(0.3, 0.2, 1);
-      gun = new THREE.Mesh(gunGeo, gunMat);
+      const gun = new THREE.Mesh(gunGeo, gunMat);
       gun.position.set(0.5, -0.5, -1);
       camera.add(gun);
 
-      // Enemies
-      for (let i = 0; i < 5; i++) spawnEnemy();
+      // Enemies setup
+      for (let i = 0; i < 6; i++) spawnEnemy();
 
+      // Event listeners
       document.addEventListener('mousedown', shoot);
       document.addEventListener('keydown', e => {
         if (e.code === 'KeyR') reload();
       });
+
+      window.addEventListener('resize', onWindowResize);
+    }
+
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
     }
 
     function shoot() {
       if (!controls.isLocked || ammo <= 0 || isPaused) return;
+
       const now = performance.now();
       if (now - lastShotTime < 300) return;
       lastShotTime = now;
@@ -209,7 +246,7 @@
       bullet.position.copy(camera.position);
       const dir = new THREE.Vector3();
       camera.getWorldDirection(dir);
-      bullet.userData.velocity = dir.multiplyScalar(2);
+      bullet.userData.velocity = dir.multiplyScalar(3);
       scene.add(bullet);
       bullets.push(bullet);
     }
@@ -220,60 +257,176 @@
     }
 
     function spawnEnemy() {
-      const enemy = new THREE.Mesh(
-        new THREE.BoxGeometry(1, 2, 1),
-        new THREE.MeshStandardMaterial({ color: 0xaa0000 })
-      );
-      enemy.position.set(Math.random() * 80 - 40, 1, Math.random() * 80 - 40);
+      const enemyMat = new THREE.MeshStandardMaterial({ color: 0xaa0000 });
+      const enemyGeo = new THREE.BoxGeometry(1, 2, 1);
+      const enemy = new THREE.Mesh(enemyGeo, enemyMat);
+      enemy.position.set(Math.random() * 40 - 20, 1, Math.random() * 40 - 20);
       enemy.health = 100;
+      enemy.canShoot = true;
+      enemy.lastShootTime = 0;
+      enemy.bullets = [];
       scene.add(enemy);
       enemies.push(enemy);
+    }
+
+    function enemyShoot(enemy) {
+      if (!enemy.canShoot) return;
+      const now = performance.now();
+      if (now - enemy.lastShootTime < 1500) return;
+      enemy.lastShootTime = now;
+
+      const bullet = new THREE.Mesh(
+        new THREE.SphereGeometry(0.1, 8, 8),
+        new THREE.MeshStandardMaterial({ color: 0xff0000 })
+      );
+      bullet.position.copy(enemy.position).add(new THREE.Vector3(0, 1.2, 0));
+      
+      // Shoot towards player
+      const dir = new THREE.Vector3().subVectors(camera.position, enemy.position).normalize();
+      bullet.userData.velocity = dir.multiplyScalar(2.5);
+      scene.add(bullet);
+      enemy.bullets.push(bullet);
+    }
+
+    function checkCollisionBox(position, size, objects) {
+      // Simple AABB collision detection
+      const min = position.clone().sub(size.clone().multiplyScalar(0.5));
+      const max = position.clone().add(size.clone().multiplyScalar(0.5));
+      for (const obj of objects) {
+        const objMin = obj.position.clone().sub(new THREE.Vector3(4, 2, 4)); // container half size
+        const objMax = obj.position.clone().add(new THREE.Vector3(4, 2, 4));
+        if (min.x <= objMax.x && max.x >= objMin.x &&
+            min.y <= objMax.y && max.y >= objMin.y &&
+            min.z <= objMax.z && max.z >= objMin.z) {
+          return true;
+        }
+      }
+      return false;
     }
 
     function animate() {
       requestAnimationFrame(animate);
       if (isPaused) return;
 
-      const delta = clock.getDelta();
+      const time = performance.now();
+      const delta = (time - prevTime) / 1000;
+      prevTime = time;
 
+      // Handle bullets movement
       bullets.forEach((b, i) => {
         b.position.add(b.userData.velocity);
+
+        // Remove bullet if out of range
         if (b.position.length() > 200) {
           scene.remove(b);
           bullets.splice(i, 1);
         }
-      });
 
-      enemies.forEach((enemy, i) => {
-        const dir = new THREE.Vector3().subVectors(camera.position, enemy.position);
-        if (dir.length() < 20) {
-          dir.normalize().multiplyScalar(0.02);
-          enemy.position.add(dir);
-          if (Math.random() < 0.01 && dir.length() < 10) {
-            health -= 5;
-            healthText.textContent = health;
-            if (health <= 0) respawn();
-          }
-        }
-
-        bullets.forEach((b, j) => {
+        // Check if bullet hits enemies
+        enemies.forEach((enemy, j) => {
           if (b.position.distanceTo(enemy.position) < 1) {
             enemy.health -= 50;
             scene.remove(b);
-            bullets.splice(j, 1);
+            bullets.splice(i, 1);
             if (enemy.health <= 0) {
               scene.remove(enemy);
-              enemies.splice(i, 1);
+              enemies.splice(j, 1);
               setTimeout(spawnEnemy, 5000);
             }
           }
         });
       });
 
-      if (keys['KeyW']) controls.moveForward(0.1);
-      if (keys['KeyS']) controls.moveForward(-0.1);
-      if (keys['KeyA']) controls.moveRight(-0.1);
-      if (keys['KeyD']) controls.moveRight(0.1);
+      // Enemy AI
+      enemies.forEach(enemy => {
+        const toPlayer = new THREE.Vector3().subVectors(camera.position, enemy.position);
+        const distance = toPlayer.length();
+
+        // Move towards player if farther than 3 units
+        if (distance > 3) {
+          toPlayer.normalize();
+          const speed = 1.5 * delta; // faster enemy speed
+          const nextPos = enemy.position.clone().add(toPlayer.clone().multiplyScalar(speed));
+
+          // Check collision with containers before moving
+          if (!checkCollisionBox(nextPos, new THREE.Vector3(1, 2, 1), crates)) {
+            enemy.position.copy(nextPos);
+          }
+        }
+
+        // Enemy shooting
+        if (distance < 15) {
+          enemyShoot(enemy);
+        }
+
+        // Move enemy bullets
+        enemy.bullets.forEach((eb, ei) => {
+          eb.position.add(eb.userData.velocity);
+          if (eb.position.distanceTo(camera.position) < 1.5) {
+            health -= 10;
+            healthText.textContent = health;
+            scene.remove(eb);
+            enemy.bullets.splice(ei, 1);
+            if (health <= 0) respawn();
+          }
+          if (eb.position.length() > 200) {
+            scene.remove(eb);
+            enemy.bullets.splice(ei, 1);
+          }
+        });
+      });
+
+      // Player movement & jumping physics
+      velocity.x -= velocity.x * 10.0 * delta;
+      velocity.z -= velocity.z * 10.0 * delta;
+      velocity.y -= 9.8 * 5.0 * delta; // gravity
+
+      direction.z = Number(keys['KeyW']) - Number(keys['KeyS']);
+      direction.x = Number(keys['KeyD']) - Number(keys['KeyA']);
+      direction.normalize();
+
+      if (keys['Space'] && canJump) {
+        velocity.y = 7;
+        canJump = false;
+      }
+
+      if (direction.length() > 0) {
+        const speed = 10.0;
+        controls.moveRight(direction.x * speed * delta);
+        controls.moveForward(direction.z * speed * delta);
+      }
+
+      controls.getObject().position.y += velocity.y * delta;
+
+      // Collision with floor
+      if (controls.getObject().position.y < 1.6) {
+        velocity.y = 0;
+        controls.getObject().position.y = 1.6;
+        canJump = true;
+      }
+
+      // Collision with containers (simple box collision)
+      crates.forEach(crate => {
+        const playerPos = controls.getObject().position.clone();
+        const cratePos = crate.position.clone();
+
+        const distX = Math.abs(playerPos.x - cratePos.x);
+        const distZ = Math.abs(playerPos.z - cratePos.z);
+
+        if (distX < 4 + 0.3 && distZ < 4 + 0.3 && playerPos.y < 4) {
+          // Push player outside container collision box
+          if (distX > distZ) {
+            if (playerPos.x > cratePos.x) controls.getObject().position.x = cratePos.x + 4 + 0.3;
+            else controls.getObject().position.x = cratePos.x - 4 - 0.3;
+          } else {
+            if (playerPos.z > cratePos.z) controls.getObject().position.z = cratePos.z + 4 + 0.3;
+            else controls.getObject().position.z = cratePos.z - 4 - 0.3;
+          }
+        }
+      });
+
+      healthText.textContent = health;
+      ammoText.textContent = `${ammo} / ${maxAmmo}`;
 
       renderer.render(scene, camera);
     }
@@ -281,7 +434,8 @@
     function respawn() {
       health = 100;
       healthText.textContent = health;
-      camera.position.set(0, 1.6, 0);
+      controls.getObject().position.set(0, 1.6, 0);
+      velocity.set(0, 0, 0);
     }
   </script>
 </body>
