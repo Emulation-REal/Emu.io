@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Emu.io</title>
+<title>Emu.io with Sounds</title>
 <style>
   * {
     box-sizing: border-box;
@@ -162,6 +162,19 @@
   const mapButtons = document.querySelectorAll('#mapSelect .btn');
   const gameUI = document.getElementById('gameUI');
 
+  // Sound assets
+  const sounds = {
+    menuMusic: new Audio('https://cdn.pixabay.com/download/audio/2021/09/17/audio_50b0e7f422.mp3?filename=upbeat-pop-112627.mp3'),
+    shoot: new Audio('https://cdn.pixabay.com/download/audio/2022/03/15/audio_06d4866ed5.mp3?filename=laser-shoot-6031.mp3'),
+    damage: new Audio('https://cdn.pixabay.com/download/audio/2022/03/15/audio_30d55d10a6.mp3?filename=hit-1-6040.mp3'),
+    death: new Audio('https://cdn.pixabay.com/download/audio/2022/03/15/audio_38e2e67fa3.mp3?filename=explosion-6038.mp3'),
+  };
+  sounds.menuMusic.loop = true;
+  sounds.menuMusic.volume = 0.15;
+  sounds.shoot.volume = 0.5;
+  sounds.damage.volume = 0.7;
+  sounds.death.volume = 0.8;
+
   let scene, camera, renderer, controls;
   let player, playerVelocity = new THREE.Vector3();
   let enemies = [];
@@ -194,7 +207,6 @@
 
   // --- Initialize scene & player ---
   function init(mapIndex) {
-    // Cleanup if restarting
     if(renderer) {
       renderer.dispose();
       renderer.domElement.remove();
@@ -315,14 +327,12 @@
         }
       },
       update(delta) {
-        // Simple AI: move towards player slowly
         const dir = new THREE.Vector3().subVectors(player.position, this.mesh.position);
         dir.y = 0;
         if (dir.length() > 2) {
           dir.normalize();
           this.mesh.position.addScaledVector(dir, this.speed * delta);
         }
-        // Shoot logic
         this.shootTimer -= delta;
         this.shoot();
       }
@@ -342,7 +352,7 @@
       mesh,
       velocity,
       isPlayerBullet,
-      lifeTime: 3, // seconds
+      lifeTime: 3,
       update(delta) {
         mesh.position.addScaledVector(this.velocity, delta);
         this.lifeTime -= delta;
@@ -353,8 +363,6 @@
   // --- Keyboard Input ---
   window.addEventListener('keydown', (e) => {
     keys[e.code] = true;
-
-    // Pause menu toggle
     if(e.code === 'Escape') {
       if (isPaused) {
         resumeGame();
@@ -392,18 +400,20 @@
     if (canShoot) {
       shootBullet();
       canShoot = false;
-      setTimeout(() => { canShoot = true; }, 300); // 0.3 sec cooldown
+      setTimeout(() => { canShoot = true; }, 300);
     }
   });
 
   function shootBullet() {
     const startPos = player.position.clone();
-    startPos.y += 1.5; // gun height
+    startPos.y += 1.5;
     const direction = new THREE.Vector3(0, 0, -1).applyEuler(camera.rotation);
     const targetPos = startPos.clone().add(direction.multiplyScalar(100));
     const bullet = createBullet(startPos, targetPos, true);
     bullets.push(bullet);
     scene.add(bullet.mesh);
+    sounds.shoot.currentTime = 0;
+    sounds.shoot.play().catch(e => {});
   }
 
   // --- Health UI update ---
@@ -424,21 +434,15 @@
 
     updatePlayer(delta);
 
-    // Update enemies
-    enemies.forEach(enemy => {
-      enemy.update(delta);
-    });
+    enemies.forEach(enemy => enemy.update(delta));
 
-    // Update bullets
     bullets.forEach((b, i) => {
       b.update(delta);
-      // Remove bullets past lifetime or far away
       if (b.lifeTime <= 0 || b.mesh.position.distanceTo(player.position) > 200) {
         scene.remove(b.mesh);
         bullets.splice(i, 1);
         return;
       }
-      // Check collision with enemies (player bullets)
       if (b.isPlayerBullet) {
         enemies.forEach((enemy, idx) => {
           if (enemy.mesh.position.distanceTo(b.mesh.position) < 1) {
@@ -454,23 +458,24 @@
       }
     });
 
-    // Update enemy bullets
     enemyBullets.forEach((b, i) => {
       b.update(delta);
-      // Remove bullets past lifetime or far away
       if (b.lifeTime <= 0 || b.mesh.position.distanceTo(player.position) > 200) {
         scene.remove(b.mesh);
         enemyBullets.splice(i, 1);
         return;
       }
-      // Check collision with player
       if (!b.isPlayerBullet) {
         if (b.mesh.position.distanceTo(player.position) < 1) {
           health -= 10;
           updateHealthUI();
+          sounds.damage.currentTime = 0;
+          sounds.damage.play().catch(e => {});
           scene.remove(b.mesh);
           enemyBullets.splice(i, 1);
           if(health <= 0) {
+            sounds.death.currentTime = 0;
+            sounds.death.play().catch(e => {});
             respawnPlayer();
           }
         }
@@ -488,6 +493,7 @@
     pauseMenu.classList.add('active');
     controls.unlock();
     canvas.style.cursor = 'default';
+    sounds.menuMusic.play().catch(e => {});
   }
   function resumeGame() {
     if (!isPaused) return;
@@ -495,6 +501,7 @@
     pauseMenu.classList.remove('active');
     controls.lock();
     canvas.style.cursor = 'none';
+    sounds.menuMusic.pause();
   }
 
   resumeBtn.onclick = () => {
@@ -505,6 +512,7 @@
     pauseMenu.classList.remove('active');
     gameUI.style.display = 'none';
     mainMenu.classList.add('active');
+    sounds.menuMusic.play().catch(e => {});
   };
 
   // --- Respawn player ---
@@ -512,7 +520,6 @@
     console.log('Player died. Respawning...');
     health = 100;
     updateHealthUI();
-    // Reset player position
     player.position.set(0, 1.5, 0);
   }
 
@@ -521,16 +528,17 @@
     console.log('Map selected:', mapIndex);
     mainMenu.classList.remove('active');
     gameUI.style.display = 'block';
+    sounds.menuMusic.pause();
     init(mapIndex);
     canvas.focus();
   }
 
   // --- Setup map buttons ---
   mapButtons.forEach(btn => {
-    btn.onclick = () => {
-      let mapIndex = Number(btn.getAttribute('data-map'));
+    btn.addEventListener('click', () => {
+      const mapIndex = Number(btn.getAttribute('data-map'));
       startGame(mapIndex);
-    };
+    });
   });
 
   // Resize canvas & renderer on window resize
@@ -550,8 +558,12 @@
   window.addEventListener('resize', onWindowResize);
   onWindowResize();
 
+  // Start playing menu music on load
+  sounds.menuMusic.play().catch(e => {
+    console.log('Autoplay blocked, user interaction needed');
+  });
+
 })();
 </script>
-
 </body>
 </html>
