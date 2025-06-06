@@ -1,36 +1,40 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<title>Emu.io - Airsoft FPS</title>
-<style>
-  html, body {
-    margin: 0; padding: 0; overflow: hidden;
-    font-family: "Segoe UI", sans-serif;
-    background: #000;
-    height: 100%;
-  }
-  canvas { display: block; }
-  #hud {
-    position: absolute;
-    top: 10px; left: 10px;
-    color: white;
-    font-size: 18px;
-    user-select: none;
-    z-index: 5;
-    display: flex;
-    flex-direction: column;
-  }
-  #crosshair {
-    position: absolute;
-    left: 50%; top: 50%;
-    width: 4px; height: 4px;
-    background: white;
-    margin-left: -2px;
-    margin-top: -2px;
-    z-index: 5;
-  }
-</style>
+  <meta charset="UTF-8" />
+  <title>Airsoft Field FPS</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      height: 100%;
+      background: #111;
+    }
+    canvas {
+      display: block;
+    }
+    #hud {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 5;
+      color: white;
+      font-size: 18px;
+      user-select: none;
+      font-family: Arial, sans-serif;
+    }
+    #crosshair {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 4px;
+      height: 4px;
+      background: white;
+      transform: translate(-50%, -50%);
+      z-index: 5;
+    }
+  </style>
 </head>
 <body>
   <div id="hud">
@@ -41,285 +45,153 @@
   <canvas id="gameCanvas"></canvas>
 
   <script type="module">
-    import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.module.js';
-    import { PointerLockControls } from 'https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/controls/PointerLockControls.js';
+    import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.153.0/build/three.module.js';
+    import { PointerLockControls } from 'https://cdn.jsdelivr.net/npm/three@0.153.0/examples/jsm/controls/PointerLockControls.js';
 
     const canvas = document.getElementById('gameCanvas');
-    const hud = document.getElementById('hud');
     const healthText = document.getElementById('healthText');
     const ammoText = document.getElementById('ammoText');
-    const crosshair = document.getElementById('crosshair');
 
     let scene, camera, renderer, controls, clock;
     let bullets = [], enemies = [];
     let health = 100, ammo = 10, maxAmmo = 10;
-    let isPaused = false;
-    let playerVelocity = new THREE.Vector3();
-    let canJump = false;
-    const keys = {};
+    let playerSpeed = 5;
+    let keys = {};
     let lastShotTime = 0;
-    let animationId;
+
+    init();
+    animate();
 
     function init() {
       scene = new THREE.Scene();
-      scene.background = new THREE.Color(0x87ceeb);
       camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-      renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+      camera.position.set(0, 1.6, 0);
+
+      renderer = new THREE.WebGLRenderer({ canvas });
       renderer.setSize(window.innerWidth, window.innerHeight);
-      renderer.shadowMap.enabled = true;
       clock = new THREE.Clock();
 
-      const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-      scene.add(ambientLight);
+      const ambient = new THREE.AmbientLight(0xffffff, 0.4);
+      const dir = new THREE.DirectionalLight(0xffffff, 1);
+      dir.position.set(50, 100, 50);
+      scene.add(ambient, dir);
 
-      const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-      dirLight.position.set(30, 50, 30);
-      dirLight.castShadow = true;
-      scene.add(dirLight);
-
-      const ground = new THREE.Mesh(
-        new THREE.PlaneGeometry(800, 800),
-        new THREE.MeshStandardMaterial({ color: 0x3a5f0b })
+      const floor = new THREE.Mesh(
+        new THREE.PlaneGeometry(500, 500),
+        new THREE.MeshStandardMaterial({ color: 0x444444 })
       );
-      ground.rotation.x = -Math.PI / 2;
-      ground.receiveShadow = true;
-      scene.add(ground);
+      floor.rotation.x = -Math.PI / 2;
+      scene.add(floor);
 
-      const barrierGeo = new THREE.BoxGeometry(6, 2, 2);
-      const barrierMat = new THREE.MeshStandardMaterial({ color: 0xdadada });
-      for (let z = -350; z <= 350; z += 15) {
-        for (let x = -350; x <= 350; x += 15) {
-          if (Math.random() < 0.3) continue;
-          const barrier = new THREE.Mesh(barrierGeo, barrierMat);
-          barrier.position.set(x + (Math.random() - 0.5) * 4, 1, z + (Math.random() - 0.5) * 4);
-          barrier.castShadow = true;
-          barrier.receiveShadow = true;
-          scene.add(barrier);
-          barrier.userData.isBarrier = true;
-        }
+      // Add cover objects
+      const houseMat = new THREE.MeshStandardMaterial({ color: 0x888888 });
+      for (let i = 0; i < 10; i++) {
+        const house = new THREE.Mesh(new THREE.BoxGeometry(8, 5, 8), houseMat);
+        house.position.set((Math.random() - 0.5) * 400, 2.5, (Math.random() - 0.5) * 400);
+        scene.add(house);
       }
 
-      const houseMat = new THREE.MeshStandardMaterial({ color: 0x8b4513 });
-      const windowMat = new THREE.MeshStandardMaterial({ color: 0x000000, opacity: 0.5, transparent: true });
-      const houseGeo = new THREE.BoxGeometry(12, 8, 12);
-      const housePositions = [
-        [-250, 4, -250], [150, 4, -200],
-        [-200, 4, 150], [220, 4, 220],
-        [0, 4, 0], [100, 4, 100]
-      ];
-      for (const pos of housePositions) {
-        const house = new THREE.Group();
-        const mainBox = new THREE.Mesh(houseGeo, houseMat);
-        mainBox.position.set(0, 4, 0);
-        mainBox.castShadow = true;
-        mainBox.receiveShadow = true;
-        house.add(mainBox);
-
-        for (let i = 0; i < 4; i++) {
-          const windowMesh = new THREE.Mesh(new THREE.PlaneGeometry(3, 3), windowMat);
-          if (i === 0) windowMesh.position.set(0, 4, 6.01);
-          if (i === 1) {
-            windowMesh.position.set(6.01, 4, 0);
-            windowMesh.rotation.y = -Math.PI / 2;
-          }
-          if (i === 2) {
-            windowMesh.position.set(0, 4, -6.01);
-            windowMesh.rotation.y = Math.PI;
-          }
-          if (i === 3) {
-            windowMesh.position.set(-6.01, 4, 0);
-            windowMesh.rotation.y = Math.PI / 2;
-          }
-          house.add(windowMesh);
-        }
-
-        house.position.set(pos[0], pos[1], pos[2]);
-        house.userData.isHouse = true;
-        scene.add(house);
+      const barrierMat = new THREE.MeshStandardMaterial({ color: 0x5555aa });
+      for (let i = 0; i < 30; i++) {
+        const barrier = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 6), barrierMat);
+        barrier.position.set((Math.random() - 0.5) * 400, 1, (Math.random() - 0.5) * 400);
+        scene.add(barrier);
       }
 
       controls = new PointerLockControls(camera, document.body);
       scene.add(controls.getObject());
-      controls.getObject().position.set(0, 1.6, 350);
 
       canvas.addEventListener('click', () => {
-        if (!controls.isLocked) {
+        canvas.requestPointerLock();
+      });
+
+      document.addEventListener('pointerlockchange', () => {
+        if (document.pointerLockElement === canvas) {
           controls.lock();
         }
       });
 
-      // Gun
-      const gun = new THREE.Mesh(
-        new THREE.BoxGeometry(0.3, 0.2, 1),
-        new THREE.MeshStandardMaterial({ color: 0x555555 })
-      );
-      gun.position.set(0.5, -0.5, -1);
-      camera.add(gun);
-
-      for (let i = 0; i < 12; i++) spawnEnemy();
+      window.addEventListener('keydown', e => keys[e.code] = true);
+      window.addEventListener('keyup', e => keys[e.code] = false);
 
       document.addEventListener('mousedown', shoot);
-      document.addEventListener('keydown', e => {
-        if (e.code === 'KeyR') reload();
-        keys[e.code] = true;
-      });
-      document.addEventListener('keyup', e => keys[e.code] = false);
 
-      window.addEventListener('resize', () => {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-      });
-
-      animate();
+      for (let i = 0; i < 5; i++) spawnEnemy();
     }
 
     function shoot() {
-      if (!controls.isLocked || ammo <= 0 || isPaused) return;
+      if (ammo <= 0) return;
       const now = performance.now();
-      if (now - lastShotTime < 250) return;
+      if (now - lastShotTime < 300) return;
       lastShotTime = now;
-
       ammo--;
       ammoText.textContent = `${ammo} / ${maxAmmo}`;
 
       const bullet = new THREE.Mesh(
-        new THREE.SphereGeometry(0.1, 8, 8),
+        new THREE.SphereGeometry(0.1),
         new THREE.MeshStandardMaterial({ color: 0xffff00 })
       );
       bullet.position.copy(camera.position);
       const dir = new THREE.Vector3();
       camera.getWorldDirection(dir);
-      bullet.userData.velocity = dir.multiplyScalar(3);
-      bullet.castShadow = true;
+      bullet.userData.velocity = dir.multiplyScalar(2);
       scene.add(bullet);
       bullets.push(bullet);
     }
 
-    function reload() {
-      if (ammo < maxAmmo) {
-        ammo = maxAmmo;
-        ammoText.textContent = `${ammo} / ${maxAmmo}`;
-      }
-    }
-
     function spawnEnemy() {
       const enemy = new THREE.Mesh(
-        new THREE.BoxGeometry(1.5, 3, 1.5),
-        new THREE.MeshStandardMaterial({ color: 0xaa0000 })
+        new THREE.BoxGeometry(1, 2, 1),
+        new THREE.MeshStandardMaterial({ color: 0xff0000 })
       );
-      enemy.castShadow = true;
-      enemy.position.set(
-        (Math.random() - 0.5) * 700,
-        1.5,
-        (Math.random() - 0.5) * 700
-      );
+      enemy.position.set((Math.random() - 0.5) * 400, 1, (Math.random() - 0.5) * 400);
       enemy.health = 100;
       scene.add(enemy);
       enemies.push(enemy);
     }
 
     function animate() {
-      animationId = requestAnimationFrame(animate);
-      if (isPaused) return;
-
+      requestAnimationFrame(animate);
       const delta = clock.getDelta();
 
-      for (let i = bullets.length - 1; i >= 0; i--) {
-        const b = bullets[i];
+      bullets.forEach((b, i) => {
         b.position.add(b.userData.velocity);
-        if (b.position.length() > 1000) {
+        if (b.position.length() > 200) {
           scene.remove(b);
           bullets.splice(i, 1);
-          continue;
         }
-      }
+      });
 
-      for (let i = enemies.length - 1; i >= 0; i--) {
-        const enemy = enemies[i];
-        const toPlayer = new THREE.Vector3().subVectors(controls.getObject().position, enemy.position);
-        const dist = toPlayer.length();
-
-        if (dist < 30) {
-          toPlayer.normalize();
-          enemy.position.addScaledVector(toPlayer, 2 * delta);
-          if (dist < 3 && Math.random() < 0.02) {
-            health -= 10;
+      enemies.forEach((enemy, i) => {
+        const dir = new THREE.Vector3().subVectors(camera.position, enemy.position);
+        if (dir.length() < 50) {
+          dir.normalize().multiplyScalar(0.02);
+          enemy.position.add(dir);
+          if (Math.random() < 0.005) {
+            health -= 5;
             healthText.textContent = health;
             if (health <= 0) respawn();
           }
         }
-
-        for (let j = bullets.length - 1; j >= 0; j--) {
-          const b = bullets[j];
-          if (b.position.distanceTo(enemy.position) < 1.2) {
+        bullets.forEach((b, j) => {
+          if (b.position.distanceTo(enemy.position) < 1) {
             enemy.health -= 50;
             scene.remove(b);
             bullets.splice(j, 1);
             if (enemy.health <= 0) {
               scene.remove(enemy);
               enemies.splice(i, 1);
-              setTimeout(spawnEnemy, 4000);
+              setTimeout(spawnEnemy, 3000);
             }
-            break;
           }
-        }
-      }
-
-      let direction = new THREE.Vector3();
-      if (keys['KeyW']) direction.z -= 1;
-      if (keys['KeyS']) direction.z += 1;
-      if (keys['KeyA']) direction.x -= 1;
-      if (keys['KeyD']) direction.x += 1;
-      direction.normalize();
-
-      const camDir = new THREE.Vector3();
-      camera.getWorldDirection(camDir);
-      camDir.y = 0;
-      camDir.normalize();
-
-      const camRight = new THREE.Vector3();
-      camRight.crossVectors(new THREE.Vector3(0, 1, 0), camDir).normalize();
-
-      const move = new THREE.Vector3();
-      move.addScaledVector(camDir, direction.z * 12 * delta);
-      move.addScaledVector(camRight, direction.x * 12 * delta);
-
-      const newPos = controls.getObject().position.clone().add(move);
-      let blocked = false;
-
-      scene.children.forEach(obj => {
-        if (!obj.geometry || !obj.position) return;
-        const objPos = obj.position;
-        let sizeX = 0, sizeZ = 0;
-        if (obj.userData.isBarrier) { sizeX = 6; sizeZ = 2; }
-        else if (obj.userData.isHouse) { sizeX = 12; sizeZ = 12; }
-        else return;
-
-        const distX = Math.abs(objPos.x - newPos.x);
-        const distZ = Math.abs(objPos.z - newPos.z);
-        if (distX < sizeX * 0.5 + 0.5 && distZ < sizeZ * 0.5 + 0.5) {
-          blocked = true;
-        }
+        });
       });
 
-      if (!blocked) {
-        controls.getObject().position.add(move);
-      }
-
-      playerVelocity.y -= 30 * delta;
-      controls.getObject().position.y += playerVelocity.y * delta;
-
-      if (controls.getObject().position.y < 1.6) {
-        playerVelocity.y = 0;
-        controls.getObject().position.y = 1.6;
-        canJump = true;
-      }
-
-      if (keys['Space'] && canJump) {
-        playerVelocity.y = 10;
-        canJump = false;
-      }
+      const speed = playerSpeed * delta;
+      if (keys['KeyW']) controls.moveForward(speed);
+      if (keys['KeyS']) controls.moveForward(-speed);
+      if (keys['KeyA']) controls.moveRight(-speed);
+      if (keys['KeyD']) controls.moveRight(speed);
 
       renderer.render(scene, camera);
     }
@@ -327,15 +199,8 @@
     function respawn() {
       health = 100;
       healthText.textContent = health;
-      controls.getObject().position.set(0, 1.6, 350);
+      camera.position.set(0, 1.6, 0);
     }
-
-    // Start game on page load
-    window.addEventListener('DOMContentLoaded', () => {
-      hud.style.display = 'flex';
-      crosshair.style.display = 'block';
-      init();
-    });
   </script>
 </body>
 </html>
