@@ -8,7 +8,7 @@
       margin: 0;
       font-family: sans-serif;
       overflow: hidden;
-      background: #000;
+      background: #111;
     }
 
     #start-screen {
@@ -38,6 +38,7 @@
       width: 100vw;
       height: 100vh;
       display: block;
+      outline: none;
     }
 
     #hud {
@@ -66,6 +67,7 @@
   <div id="start-screen">
     <h1>🔥 Emu.io</h1>
     <button id="start-btn">Start Game</button>
+    <p>Click inside the game area to lock pointer and control the camera.</p>
   </div>
 
   <div id="hud">
@@ -74,9 +76,8 @@
     </div>
   </div>
 
-  <canvas id="game"></canvas>
+  <canvas id="game" tabindex="0"></canvas>
 
-  <!-- 3D Libraries -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.157.0/build/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.157.0/examples/js/controls/PointerLockControls.js"></script>
 
@@ -101,17 +102,34 @@
     };
 
     function initGame() {
+      // Clear old scene if restarting
+      if(scene) {
+        while(scene.children.length > 0){
+          scene.remove(scene.children[0]);
+        }
+        bullets = [];
+        bots = [];
+        health = 100;
+        updateHealthBar();
+      }
+
       scene = new THREE.Scene();
-      scene.background = new THREE.Color(0x111111);
+      scene.background = new THREE.Color(0x222222);
 
       camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-      renderer = new THREE.WebGLRenderer({ canvas: document.getElementById("game") });
+      camera.position.set(0, 1.6, 5);
+
+      renderer = new THREE.WebGLRenderer({ canvas: document.getElementById("game"), antialias: true });
       renderer.setSize(window.innerWidth, window.innerHeight);
 
       // Light
       const light = new THREE.DirectionalLight(0xffffff, 1);
       light.position.set(10, 10, 10);
       scene.add(light);
+
+      // Ambient light to soften shadows
+      const ambient = new THREE.AmbientLight(0x404040);
+      scene.add(ambient);
 
       // Ground
       const ground = new THREE.Mesh(
@@ -124,7 +142,12 @@
 
       // Controls
       controls = new THREE.PointerLockControls(camera, document.body);
-      document.body.addEventListener("click", () => controls.lock());
+
+      // Lock pointer on click anywhere
+      document.body.addEventListener("click", () => {
+        if (!controls.isLocked) controls.lock();
+      });
+
       scene.add(controls.getObject());
 
       // Gun (simple box)
@@ -143,6 +166,8 @@
       document.addEventListener("keydown", e => keys[e.code] = true);
       document.addEventListener("keyup", e => keys[e.code] = false);
       document.addEventListener("mousedown", shoot);
+
+      window.addEventListener("resize", onWindowResize);
     }
 
     function spawnBot(x, z) {
@@ -157,6 +182,8 @@
     }
 
     function shoot() {
+      if(!controls.isLocked) return; // Only shoot if pointer locked
+
       const bullet = new THREE.Mesh(
         new THREE.SphereGeometry(0.1, 8, 8),
         new THREE.MeshStandardMaterial({ color: 0xffff00 })
@@ -170,6 +197,8 @@
     }
 
     function updateMovement() {
+      if(!controls.isLocked) return;
+
       const speed = 0.15;
       if (keys["KeyW"]) controls.moveForward(speed);
       if (keys["KeyS"]) controls.moveForward(-speed);
@@ -185,8 +214,8 @@
       controls.getObject().position.y += velocityY;
       velocityY += gravity;
 
-      if (controls.getObject().position.y < 1.5) {
-        controls.getObject().position.y = 1.5;
+      if (controls.getObject().position.y < 1.6) {
+        controls.getObject().position.y = 1.6;
         velocityY = 0;
         onGround = true;
       }
@@ -195,6 +224,14 @@
     function updateBullets() {
       bullets.forEach((b, i) => {
         b.position.add(b.velocity);
+
+        // Remove bullet if far away
+        if(b.position.distanceTo(camera.position) > 100) {
+          scene.remove(b);
+          bullets.splice(i, 1);
+          return;
+        }
+
         bots.forEach(bot => {
           if (bot.health > 0 && b.position.distanceTo(bot.position) < 1) {
             bot.health -= 50;
@@ -206,9 +243,10 @@
     }
 
     function updateBots() {
-      bots.forEach(bot => {
+      bots.forEach((bot, idx) => {
         if (bot.health <= 0) {
           scene.remove(bot);
+          bots.splice(idx, 1);
           return;
         }
 
@@ -236,6 +274,13 @@
       updateBullets();
       updateBots();
       renderer.render(scene, camera);
+    }
+
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+
+      renderer.setSize(window.innerWidth, window.innerHeight);
     }
   </script>
 </body>
