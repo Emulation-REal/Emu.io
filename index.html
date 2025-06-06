@@ -97,45 +97,15 @@
     const returnToMenuBtn = document.getElementById('returnToMenu');
     const crosshair = document.getElementById('crosshair');
 
+    // Variables
     let scene, camera, renderer, controls, clock;
     let bullets = [], enemies = [];
     let health = 100, ammo = 10, maxAmmo = 10;
     let isPaused = false;
     let playerVelocity = new THREE.Vector3();
     let canJump = false;
-
     const keys = {};
-
-    startGameBtn.onclick = () => {
-      mainMenu.style.display = 'none';
-      init();
-      animate();
-    };
-
-    resumeGameBtn.onclick = () => {
-      pauseMenu.style.display = 'none';
-      controls.lock();
-      isPaused = false;
-      hud.style.display = 'flex';
-      crosshair.style.display = 'block';
-    };
-
-    returnToMenuBtn.onclick = () => location.reload();
-
-    window.addEventListener('keydown', e => {
-      if (e.code === 'Escape') {
-        if (!isPaused) {
-          isPaused = true;
-          pauseMenu.style.display = 'flex';
-          controls.unlock();
-          hud.style.display = 'none';
-          crosshair.style.display = 'none';
-        }
-      }
-      keys[e.code] = true;
-    });
-
-    window.addEventListener('keyup', e => keys[e.code] = false);
+    let lastShotTime = 0;
 
     function init() {
       scene = new THREE.Scene();
@@ -310,8 +280,6 @@
       enemies.push(enemy);
     }
 
-    let lastShotTime = 0;
-
     function animate() {
       requestAnimationFrame(animate);
       if (isPaused) return;
@@ -438,6 +406,38 @@
       healthText.textContent = health;
       controls.getObject().position.set(0, 1.6, 350);
     }
+
+    // Event listeners for keys
+    window.addEventListener('keydown', e => {
+      if (e.code === 'Escape') {
+        if (!isPaused) {
+          isPaused = true;
+          pauseMenu.style.display = 'flex';
+          controls.unlock();
+          hud.style.display = 'none';
+          crosshair.style.display = 'none';
+        }
+      }
+      keys[e.code] = true;
+    });
+
+    window.addEventListener('keyup', e => keys[e.code] = false);
+
+    resumeGameBtn.onclick = () => {
+      pauseMenu.style.display = 'none';
+      controls.lock();
+      isPaused = false;
+      hud.style.display = 'flex';
+      crosshair.style.display = 'block';
+    };
+
+    returnToMenuBtn.onclick = () => location.reload();
+
+    startGameBtn.onclick = () => {
+      mainMenu.style.display = 'none';
+      init();
+      animate();
+    };
   </script>
 </body>
 </html>
