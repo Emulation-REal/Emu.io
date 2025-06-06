@@ -1,13 +1,18 @@
 let scene, camera, renderer, controls;
-let bullets = [];
-let bots = [];
-let health = 100;
+let bullets = [], bots = [];
+let health = 100, velocityY = 0, onGround = false;
+
+const keys = {};
+const gravity = -0.01;
 
 const startBtn = document.getElementById("start-btn");
 const startScreen = document.getElementById("start-screen");
+const healthBar = document.getElementById("health-bar");
+const hud = document.getElementById("hud");
 
 startBtn.onclick = () => {
   startScreen.style.display = "none";
+  hud.style.display = "block";
   initGame();
   animate();
 };
@@ -20,15 +25,18 @@ function initGame() {
   renderer = new THREE.WebGLRenderer({ canvas: document.getElementById("game") });
   renderer.setSize(window.innerWidth, window.innerHeight);
 
+  // Light
   const light = new THREE.DirectionalLight(0xffffff, 1);
-  light.position.set(5, 10, 7.5);
+  light.position.set(10, 10, 10);
   scene.add(light);
 
+  // Ground
   const ground = new THREE.Mesh(
     new THREE.PlaneGeometry(100, 100),
     new THREE.MeshStandardMaterial({ color: 0x444444 })
   );
   ground.rotation.x = -Math.PI / 2;
+  ground.receiveShadow = true;
   scene.add(ground);
 
   // Controls
@@ -36,7 +44,7 @@ function initGame() {
   document.body.addEventListener("click", () => controls.lock());
   scene.add(controls.getObject());
 
-  // 3D Gun (Simple Box for Now)
+  // Gun model (simple box on camera)
   const gun = new THREE.Mesh(
     new THREE.BoxGeometry(0.3, 0.2, 1),
     new THREE.MeshStandardMaterial({ color: 0xaaaaaa })
@@ -44,68 +52,25 @@ function initGame() {
   gun.position.set(0.5, -0.5, -1);
   camera.add(gun);
 
-  // Spawn Bots
-  for (let i = 0; i < 5; i++) {
+  // Spawn bots
+  for (let i = 0; i < 7; i++) {
     spawnBot(Math.random() * 60 - 30, Math.random() * 60 - 30);
   }
 
-  // Input
-  window.addEventListener("mousedown", shoot);
-
-  const keys = {};
   document.addEventListener("keydown", e => keys[e.code] = true);
   document.addEventListener("keyup", e => keys[e.code] = false);
-
-  function updateMovement() {
-    const speed = 0.1;
-    if (keys["KeyW"]) controls.moveForward(speed);
-    if (keys["KeyS"]) controls.moveForward(-speed);
-    if (keys["KeyA"]) controls.moveRight(-speed);
-    if (keys["KeyD"]) controls.moveRight(speed);
-  }
-
-  function updateBullets() {
-    bullets.forEach((b, i) => {
-      b.position.add(b.velocity);
-      bots.forEach(bot => {
-        if (bot.health > 0 && b.position.distanceTo(bot.position) < 1) {
-          bot.health -= 50;
-          scene.remove(b);
-          bullets.splice(i, 1);
-        }
-      });
-    });
-  }
-
-  function updateBots() {
-    bots.forEach(bot => {
-      if (bot.health <= 0) {
-        scene.remove(bot);
-        return;
-      }
-      const dir = new THREE.Vector3().subVectors(controls.getObject().position, bot.position).normalize();
-      bot.position.add(dir.multiplyScalar(0.03));
-      if (bot.position.distanceTo(controls.getObject().position) < 1.5) {
-        health -= 0.05;
-        if (health <= 0) {
-          alert("Game Over! You died.");
-          location.reload();
-        }
-      }
-    });
-  }
-
-  window.gameLoop = () => {
-    updateMovement();
-    updateBullets();
-    updateBots();
-    renderer.render(scene, camera);
-  };
+  document.addEventListener("mousedown", shoot);
 }
 
-function animate() {
-  requestAnimationFrame(animate);
-  if (window.gameLoop) window.gameLoop();
+function spawnBot(x, z) {
+  const bot = new THREE.Mesh(
+    new THREE.CapsuleGeometry(0.5, 1, 4, 8),
+    new THREE.MeshStandardMaterial({ color: 0xff5555 })
+  );
+  bot.position.set(x, 1, z);
+  bot.health = 100;
+  scene.add(bot);
+  bots.push(bot);
 }
 
 function shoot() {
@@ -116,18 +81,76 @@ function shoot() {
   bullet.position.copy(camera.position);
   bullet.velocity = new THREE.Vector3();
   camera.getWorldDirection(bullet.velocity);
-  bullet.velocity.multiplyScalar(1.5);
+  bullet.velocity.multiplyScalar(2);
   scene.add(bullet);
   bullets.push(bullet);
 }
 
-function spawnBot(x, z) {
-  const bot = new THREE.Mesh(
-    new THREE.CapsuleGeometry(0.5, 1, 4, 8),
-    new THREE.MeshStandardMaterial({ color: 0xff4444 })
-  );
-  bot.position.set(x, 1, z);
-  bot.health = 100;
-  scene.add(bot);
-  bots.push(bot);
+function updateMovement() {
+  const speed = 0.15;
+  if (keys["KeyW"]) controls.moveForward(speed);
+  if (keys["KeyS"]) controls.moveForward(-speed);
+  if (keys["KeyA"]) controls.moveRight(-speed);
+  if (keys["KeyD"]) controls.moveRight(speed);
+
+  if (keys["Space"] && onGround) {
+    velocityY = 0.25;
+    onGround = false;
+  }
+
+  // Gravity
+  controls.getObject().position.y += velocityY;
+  velocityY += gravity;
+
+  if (controls.getObject().position.y < 1.5) {
+    controls.getObject().position.y = 1.5;
+    velocityY = 0;
+    onGround = true;
+  }
+}
+
+function updateBullets() {
+  bullets.forEach((b, i) => {
+    b.position.add(b.velocity);
+    bots.forEach(bot => {
+      if (bot.health > 0 && b.position.distanceTo(bot.position) < 1) {
+        bot.health -= 50;
+        scene.remove(b);
+        bullets.splice(i, 1);
+      }
+    });
+  });
+}
+
+function updateBots() {
+  bots.forEach(bot => {
+    if (bot.health <= 0) {
+      scene.remove(bot);
+      return;
+    }
+
+    const dir = new THREE.Vector3().subVectors(controls.getObject().position, bot.position).normalize();
+    bot.position.add(dir.multiplyScalar(0.03));
+
+    if (bot.position.distanceTo(controls.getObject().position) < 1.5) {
+      health -= 0.05;
+      updateHealthBar();
+      if (health <= 0) {
+        alert("You were killed!");
+        location.reload();
+      }
+    }
+  });
+}
+
+function updateHealthBar() {
+  healthBar.style.width = `${Math.max(0, health)}%`;
+}
+
+function animate() {
+  requestAnimationFrame(animate);
+  updateMovement();
+  updateBullets();
+  updateBots();
+  renderer.render(scene, camera);
 }
