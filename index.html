@@ -2,434 +2,448 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>Airsoft Field FPS Map</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>3D Container Map FPS Demo</title>
 <style>
-  html, body {
-    margin: 0; padding: 0; overflow: hidden; height: 100%; background: #1b2a1b;
+  body, html {
+    margin: 0; padding: 0; overflow: hidden;
+    height: 100%; background-color: #222;
     font-family: Arial, sans-serif;
+    color: white;
   }
-  canvas { display: block; }
-  #hud {
+  #info {
     position: absolute;
     top: 10px; left: 10px;
-    color: white; font-size: 18px;
-    user-select: none;
+    font-size: 16px;
     z-index: 10;
+    background: rgba(0,0,0,0.5);
+    padding: 8px 12px;
+    border-radius: 4px;
   }
-  #crosshair {
+  canvas {
+    display: block;
+  }
+  #enterHint {
     position: absolute;
-    top: 50%; left: 50%;
-    width: 4px; height: 4px;
-    background: white;
-    margin-left: -2px; margin-top: -2px;
-    z-index: 10;
+    bottom: 60px;
+    width: 100%;
+    text-align: center;
+    font-size: 18px;
+    color: #fff;
+    text-shadow: 0 0 10px #0ff;
+    user-select: none;
+    pointer-events: none;
   }
 </style>
 </head>
 <body>
-<div id="hud">
-  Health: <span id="healthText">100</span> | Ammo: <span id="ammoText">10 / 10</span>
-</div>
-<div id="crosshair"></div>
-<script src="https://cdn.jsdelivr.net/npm/three@0.125.2/build/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.125.2/examples/js/controls/PointerLockControls.js"></script>
+
+<div id="info">Health: <span id="health">100</span></div>
+<div id="enterHint"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/controls/PointerLockControls.js"></script>
+
 <script>
 (() => {
+  // Basic three.js setup
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x2b3a2b);
+  scene.background = new THREE.Color(0x20232a);
+
   const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
 
   const renderer = new THREE.WebGLRenderer({antialias:true});
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.shadowMap.enabled = true;
   document.body.appendChild(renderer.domElement);
 
-  const healthText = document.getElementById('healthText');
-  const ammoText = document.getElementById('ammoText');
-
+  // Controls - Pointer Lock for FPS style mouse look
   const controls = new THREE.PointerLockControls(camera, document.body);
+
   document.body.addEventListener('click', () => {
-    if (!controls.isLocked) controls.lock();
+    controls.lock();
   });
-  scene.add(controls.getObject());
 
-  // Lighting
-  const ambientLight = new THREE.AmbientLight(0x888888);
-  scene.add(ambientLight);
-
-  const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
-  dirLight.position.set(30, 50, 30);
-  dirLight.castShadow = true;
-  dirLight.shadow.mapSize.width = 2048;
-  dirLight.shadow.mapSize.height = 2048;
-  scene.add(dirLight);
-
-  // Ground with simple grass-like color
+  // Floor
   const floorGeo = new THREE.PlaneGeometry(200, 200);
-  const floorMat = new THREE.MeshStandardMaterial({color: 0x3b6a3b});
+  const floorMat = new THREE.MeshStandardMaterial({color:0x4a6f27});
   const floor = new THREE.Mesh(floorGeo, floorMat);
   floor.rotation.x = -Math.PI/2;
   floor.receiveShadow = true;
   scene.add(floor);
 
-  // Jersey Barrier (concrete barricade)
-  const barrierGeo = new THREE.BoxGeometry(6, 2, 1.5);
-  const barrierMat = new THREE.MeshStandardMaterial({color: 0x909090, roughness: 0.8, metalness: 0.1});
+  // Lighting
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+  scene.add(ambientLight);
 
-  // Fake house components
-  function createHouse(x, z) {
+  const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+  dirLight.position.set(50, 100, 50);
+  scene.add(dirLight);
+
+  // Player variables
+  const player = {
+    height: 1.8,
+    velocity: new THREE.Vector3(),
+    direction: new THREE.Vector3(),
+    speed: 8,
+    jumpSpeed: 6,
+    canJump: false,
+    health: 100,
+    isInsideHouse: false,
+    currentHouse: null
+  };
+
+  camera.position.set(0, player.height, 0);
+  controls.getObject().position.copy(camera.position);
+  scene.add(controls.getObject());
+
+  // Houses (Enterable buildings)
+  const houses = [];
+
+  function createHouse(x,z) {
     const house = new THREE.Group();
 
     // Walls
-    const wallGeo = new THREE.BoxGeometry(8, 5, 6);
-    const wallMat = new THREE.MeshStandardMaterial({color: 0x776655, roughness: 0.7});
+    const wallMat = new THREE.MeshStandardMaterial({color:0x884422});
+    const floorMat = new THREE.MeshStandardMaterial({color:0x664422});
+    const wallGeo = new THREE.BoxGeometry(6, 4, 6);
+
     const walls = new THREE.Mesh(wallGeo, wallMat);
-    walls.castShadow = true;
-    walls.position.y = 2.5;
+    walls.position.y = 2;
     house.add(walls);
 
-    // Windows (simple rectangles with emissive blue)
-    const windowGeo = new THREE.PlaneGeometry(2, 2);
-    const windowMat = new THREE.MeshStandardMaterial({color: 0x223355, emissive: 0x3355aa, transparent: true, opacity: 0.7});
-    const win1 = new THREE.Mesh(windowGeo, windowMat);
-    win1.position.set(-2, 3, 3.01);
-    house.add(win1);
-    const win2 = win1.clone();
-    win2.position.set(2, 3, 3.01);
-    house.add(win2);
+    // Doorway: Remove front wall to create door space
+    // We'll just use a hole in the collision box for simplicity
+    // (No hole in mesh, just allow player to enter inside the bounding box)
 
-    // Door
-    const doorGeo = new THREE.BoxGeometry(2, 4, 0.2);
-    const doorMat = new THREE.MeshStandardMaterial({color: 0x552211});
-    const door = new THREE.Mesh(doorGeo, doorMat);
-    door.position.set(0, 2, -3.1);
-    house.add(door);
+    // Floor
+    const floorGeo = new THREE.PlaneGeometry(6,6);
+    const floorMesh = new THREE.Mesh(floorGeo, floorMat);
+    floorMesh.rotation.x = -Math.PI/2;
+    floorMesh.position.y = 0.01; // slightly above ground to avoid z-fighting
+    house.add(floorMesh);
 
-    house.position.set(x, 0, z);
+    house.position.set(x,0,z);
+
+    // Collision box for house to detect entry
+    house.userData.collider = new THREE.Box3().setFromObject(walls);
+
     scene.add(house);
-    return house;
+    houses.push(house);
   }
 
-  // Crate/barrel for extra cover
-  function createCrate(x,z) {
-    const crateGeo = new THREE.BoxGeometry(2.5,2.5,2.5);
-    const crateMat = new THREE.MeshStandardMaterial({color: 0x4b2e00});
-    const crate = new THREE.Mesh(crateGeo, crateMat);
-    crate.position.set(x,1.25,z);
-    crate.castShadow = true;
-    scene.add(crate);
-    return crate;
+  // Create several houses around the map
+  createHouse(15, 15);
+  createHouse(-20, -10);
+  createHouse(30, -25);
+  createHouse(-35, 20);
+
+  // Containers (obstacles)
+  const containers = [];
+  function createContainer(x,z,color=0x0066cc) {
+    const geo = new THREE.BoxGeometry(8,4,4);
+    const mat = new THREE.MeshStandardMaterial({color});
+    const container = new THREE.Mesh(geo, mat);
+    container.position.set(x, 2, z);
+    scene.add(container);
+
+    // Collision box
+    container.userData.collider = new THREE.Box3().setFromObject(container);
+    containers.push(container);
   }
 
-  // Setup barriers in a zig-zag pattern
-  const barriers = [];
-  const barrierPositions = [
-    [-20, -10], [-10, -5], [0, -10], [10, -5], [20, -10],
-    [-20, 10], [-10, 5], [0, 10], [10, 5], [20, 10]
-  ];
-  for(const [x,z] of barrierPositions) {
-    const b = new THREE.Mesh(barrierGeo, barrierMat);
-    b.position.set(x, 1, z);
-    b.castShadow = true;
-    b.receiveShadow = true;
-    scene.add(b);
-    barriers.push(b);
-  }
-
-  // Create some fake houses
-  const houses = [];
-  houses.push(createHouse(-25, 20));
-  houses.push(createHouse(25, 20));
-  houses.push(createHouse(-25, -20));
-  houses.push(createHouse(25, -20));
-  houses.push(createHouse(0, 25));
-
-  // Create some crates scattered
-  const crates = [];
-  crates.push(createCrate(-10, 0));
-  crates.push(createCrate(15, 0));
-  crates.push(createCrate(0, -15));
-  crates.push(createCrate(5, 15));
-  crates.push(createCrate(-15, 15));
-
-  // Combine all obstacles for collision
-  const obstacles = [...barriers, ...houses, ...crates];
-
-  // Player variables
-  let health = 100;
-  let ammo = 10;
-  const maxAmmo = 10;
-  let canJump = false;
-  let velocity = new THREE.Vector3();
-  let direction = new THREE.Vector3();
-  let prevTime = performance.now();
-
-  // Movement keys
-  const keys = {};
-
-  document.addEventListener('keydown', (e) => {
-    keys[e.code] = true;
-    if (e.code === 'KeyR') reload();
-  });
-  document.addEventListener('keyup', (e) => { keys[e.code] = false; });
-
-  // Gun setup
-  const gunGeo = new THREE.BoxGeometry(0.4, 0.25, 1);
-  const gunMat = new THREE.MeshStandardMaterial({color: 0x222222, roughness: 0.4, metalness: 0.7});
-  const gun = new THREE.Mesh(gunGeo, gunMat);
-  gun.position.set(0.5, -0.5, -1.2);
-  camera.add(gun);
-
-  // Bullet class
-  class Bullet {
-    constructor(position, direction, speed, color=0xffff00) {
-      this.mesh = new THREE.Mesh(
-        new THREE.SphereGeometry(0.1, 8, 8),
-        new THREE.MeshStandardMaterial({color})
-      );
-      this.mesh.position.copy(position);
-      this.velocity = direction.clone().multiplyScalar(speed);
-      scene.add(this.mesh);
-      this.alive = true;
-    }
-    update(delta) {
-      if (!this.alive) return;
-      this.mesh.position.add(this.velocity.clone().multiplyScalar(delta));
-      if(this.mesh.position.length() > 300) this.destroy();
-    }
-    destroy() {
-      scene.remove(this.mesh);
-      this.alive = false;
+  // Make a grid of containers (like shipment map)
+  for(let x=-90; x<=90; x+=18) {
+    for(let z=-90; z<=90; z+=12) {
+      if (Math.random() < 0.7) {
+        // randomly skip some containers to create paths
+        createContainer(x, z, 0xcc3300);
+      }
     }
   }
 
-  const playerBullets = [];
-  const enemyBullets = [];
+  // Player collision detection helper
+  function playerCollides(pos) {
+    const playerBox = new THREE.Box3(
+      new THREE.Vector3(pos.x-0.4, pos.y-0.1, pos.z-0.4),
+      new THREE.Vector3(pos.x+0.4, pos.y+player.height, pos.z+0.4)
+    );
 
-  function shoot() {
-    if (!controls.isLocked) return;
-    if (ammo <= 0) return;
-    ammo--;
-    ammoText.textContent = `${ammo} / ${maxAmmo}`;
-    const pos = camera.position.clone();
-    const dir = new THREE.Vector3();
-    camera.getWorldDirection(dir);
-    const bullet = new Bullet(pos, dir, 80);
-    playerBullets.push(bullet);
-  }
-
-  function reload() {
-    ammo = maxAmmo;
-    ammoText.textContent = `${ammo} / ${maxAmmo}`;
-  }
-
-  // Simple enemy class
-  class Enemy {
-    constructor() {
-      const geo = new THREE.BoxGeometry(1, 2, 1);
-      const mat = new THREE.MeshStandardMaterial({color: 0xaa0000});
-      this.mesh = new THREE.Mesh(geo, mat);
-      let tries = 0;
-      do {
-        this.mesh.position.set((Math.random() - 0.5) * 80, 1, (Math.random() - 0.5) * 80);
-        tries++;
-      } while (checkCollision(this.mesh.position, obstacles, 3) && tries < 20);
-      this.mesh.castShadow = true;
-      this.health = 100;
-      this.speed = 8; // faster enemy speed
-      this.lastShot = 0;
-      this.shootInterval = 1500;
-      scene.add(this.mesh);
+    // Check containers
+    for (const c of containers) {
+      if (playerBox.intersectsBox(c.userData.collider)) return true;
     }
-    update(delta, playerPos) {
-      if (this.health <= 0) return;
-
-      const dirToPlayer = playerPos.clone().sub(this.mesh.position);
-      const distance = dirToPlayer.length();
-      dirToPlayer.normalize();
-
-      if (distance > 3) {
-        const moveStep = dirToPlayer.clone().multiplyScalar(this.speed * delta);
-        const newPos = this.mesh.position.clone().add(moveStep);
-        if (!checkCollision(newPos, obstacles, 4)) {
-          this.mesh.position.copy(newPos);
+    // Check houses (walls)
+    for (const h of houses) {
+      // If player inside house bounding box (with a bit margin)
+      const box = h.userData.collider.clone();
+      box.expandByScalar(0.1);
+      if (playerBox.intersectsBox(box)) {
+        // But only collide if NOT inside house
+        if (!player.isInsideHouse || player.currentHouse !== h) {
+          return true;
         }
-      }
-
-      if (distance < 25) {
-        const now = performance.now();
-        if (now - this.lastShot > this.shootInterval) {
-          this.lastShot = now;
-          this.shootAt(playerPos);
-        }
-      }
-    }
-    shootAt(targetPos) {
-      const dir = targetPos.clone().sub(this.mesh.position).normalize();
-      const bulletPos = this.mesh.position.clone();
-      bulletPos.y += 1.2;
-      const bullet = new Bullet(bulletPos, dir, 60, 0xff0000);
-      enemyBullets.push(bullet);
-    }
-    damage(amount) {
-      this.health -= amount;
-      if(this.health <= 0) {
-        scene.remove(this.mesh);
-      }
-    }
-  }
-
-  const enemies = [];
-  for(let i=0; i<8; i++) enemies.push(new Enemy());
-
-  function checkCollision(position, objects, halfSize=1) {
-    for(const obj of objects) {
-      const objPos = obj.position;
-      if(
-        Math.abs(position.x - objPos.x) < halfSize + (obj.geometry ? obj.geometry.parameters.width/2 : 4) &&
-        Math.abs(position.y - objPos.y) < halfSize + (obj.geometry ? obj.geometry.parameters.height/2 : 2) &&
-        Math.abs(position.z - objPos.z) < halfSize + (obj.geometry ? obj.geometry.parameters.depth/2 : 4)
-      ) {
-        return true;
       }
     }
     return false;
   }
 
-  function resolvePlayerCollision() {
+  // Enemies
+  const enemies = [];
+  const enemySpeed = 5;
+  const enemyDamage = 5;
+  const enemyShootInterval = 1500; // ms
+
+  function createEnemy(x,z) {
+    const enemy = new THREE.Group();
+
+    const bodyGeo = new THREE.BoxGeometry(0.6,1.8,0.4);
+    const bodyMat = new THREE.MeshStandardMaterial({color: 0x883333});
+    const body = new THREE.Mesh(bodyGeo, bodyMat);
+    body.position.y = 0.9;
+    enemy.add(body);
+
+    // Gun (simple box)
+    const gunGeo = new THREE.BoxGeometry(0.1, 0.1, 0.6);
+    const gunMat = new THREE.MeshStandardMaterial({color: 0x333333});
+    const gun = new THREE.Mesh(gunGeo, gunMat);
+    gun.position.set(0, 1.2, 0.5);
+    enemy.add(gun);
+
+    enemy.position.set(x,0,z);
+    enemy.userData.health = 100;
+    enemy.userData.lastShootTime = 0;
+
+    scene.add(enemy);
+    enemies.push(enemy);
+  }
+
+  // Spawn 10 enemies randomly
+  for(let i=0; i<10; i++) {
+    createEnemy(
+      (Math.random() - 0.5) * 150,
+      (Math.random() - 0.5) * 150
+    );
+  }
+
+  // Input handling
+  const keys = {};
+  document.addEventListener('keydown', e => {
+    keys[e.code] = true;
+  });
+  document.addEventListener('keyup', e => {
+    keys[e.code] = false;
+  });
+
+  // Jump handling
+  let canJump = false;
+  let velocityY = 0;
+
+  // Enter house hint
+  const enterHint = document.getElementById('enterHint');
+
+  function checkEnterHouse() {
+    let nearHouse = null;
     const pos = controls.getObject().position;
-    for(const obj of obstacles) {
-      const dx = pos.x - obj.position.x;
-      const dy = pos.y - (obj.position.y + (obj.geometry ? obj.geometry.parameters.height/2 : 2));
-      const dz = pos.z - obj.position.z;
-      const hw = obj.geometry ? obj.geometry.parameters.width/2 : 4;
-      const hh = obj.geometry ? obj.geometry.parameters.height/2 : 2;
-      const hd = obj.geometry ? obj.geometry.parameters.depth/2 : 4;
-
-      const overlapX = hw + 0.3 - Math.abs(dx);
-      const overlapY = hh + 1 - Math.abs(dy);
-      const overlapZ = hd + 0.3 - Math.abs(dz);
-
-      if(overlapX > 0 && overlapY > 0 && overlapZ > 0) {
-        if(overlapX < overlapZ) {
-          controls.getObject().position.x += dx > 0 ? overlapX : -overlapX;
-        } else {
-          controls.getObject().position.z += dz > 0 ? overlapZ : -overlapZ;
-        }
+    for (const house of houses) {
+      const box = house.userData.collider;
+      // Check if player is near house front door (we approximate door area)
+      // Door is front side: z + 3 (house depth/2)
+      const doorPos = new THREE.Vector3(house.position.x, 0, house.position.z + 3);
+      const dist = pos.distanceTo(doorPos);
+      if (dist < 2) {
+        nearHouse = house;
+        break;
       }
+    }
+    if (nearHouse && !player.isInsideHouse) {
+      enterHint.textContent = 'Press E to enter house';
+      player.currentHouseNearby = nearHouse;
+    } else if (player.isInsideHouse) {
+      enterHint.textContent = 'Press E to exit house';
+      player.currentHouseNearby = player.currentHouse;
+    } else {
+      enterHint.textContent = '';
+      player.currentHouseNearby = null;
     }
   }
 
-  // Player movement variables
-  const playerHeight = 1.6;
-  velocity.set(0, 0, 0);
-  const gravity = 40;
-  const speed = 60; // MUCH faster movement speed
+  document.addEventListener('keydown', e => {
+    if (e.code === 'KeyE' && player.currentHouseNearby) {
+      if (!player.isInsideHouse) {
+        // Enter house: teleport inside
+        controls.getObject().position.set(
+          player.currentHouseNearby.position.x,
+          player.height,
+          player.currentHouseNearby.position.z
+        );
+        player.isInsideHouse = true;
+        player.currentHouse = player.currentHouseNearby;
+      } else {
+        // Exit house: teleport outside front door
+        controls.getObject().position.set(
+          player.currentHouse.position.x,
+          player.height,
+          player.currentHouse.position.z + 5
+        );
+        player.isInsideHouse = false;
+        player.currentHouse = null;
+      }
+    }
+  });
 
-  canJump = false;
+  // Health UI
+  const healthEl = document.getElementById('health');
 
-  let lastShotTime = 0;
-  const shotCooldown = 200;
+  // Enemy shooting logic
+  function enemyShoot(enemy, deltaTime) {
+    const now = performance.now();
+    if (now - enemy.userData.lastShootTime < enemyShootInterval) return;
+
+    const playerPos = controls.getObject().position;
+    const enemyPos = enemy.position;
+
+    const distance = enemyPos.distanceTo(playerPos);
+    if (distance < 20) {
+      // Shoot at player - instant hit for simplicity
+      player.health -= enemyDamage;
+      if (player.health < 0) player.health = 0;
+      healthEl.textContent = player.health;
+
+      enemy.userData.lastShootTime = now;
+    }
+  }
+
+  // Enemy AI movement - chase player
+  function enemyMove(enemy, deltaTime) {
+    const playerPos = controls.getObject().position;
+    const enemyPos = enemy.position;
+
+    const dir = new THREE.Vector3().subVectors(playerPos, enemyPos);
+    const dist = dir.length();
+
+    if (dist > 2) {
+      dir.normalize();
+      enemy.position.addScaledVector(dir, enemySpeed * deltaTime);
+
+      // Keep enemy on ground
+      enemy.position.y = 0;
+    }
+  }
+
+  // Respawn enemies when dead or too far
+  function checkEnemyRespawn(enemy) {
+    const playerPos = controls.getObject().position;
+    const enemyPos = enemy.position;
+
+    if (enemy.userData.health <= 0 || enemyPos.distanceTo(playerPos) > 200) {
+      // Respawn at random location
+      enemy.position.set(
+        (Math.random() - 0.5) * 150,
+        0,
+        (Math.random() - 0.5) * 150
+      );
+      enemy.userData.health = 100;
+    }
+  }
+
+  // Player collision and movement variables
+  let prevTime = performance.now();
+  let velocity = new THREE.Vector3();
+  let direction = new THREE.Vector3();
+
+  // Jump and gravity
+  let canJumpPlayer = false;
+  let velocityYPlayer = 0;
+  const gravity = -30;
 
   function animate() {
     requestAnimationFrame(animate);
+
     const time = performance.now();
     const delta = (time - prevTime) / 1000;
-    prevTime = time;
 
-    if(controls.isLocked) {
-      direction.z = Number(keys['KeyS']) - Number(keys['KeyW']);
-      direction.x = Number(keys['KeyD']) - Number(keys['KeyA']);
-      direction.normalize();
+    // Movement input
+    direction.set(0,0,0);
+    if (keys['KeyW']) direction.z -= 1;
+    if (keys['KeyS']) direction.z += 1;
+    if (keys['KeyA']) direction.x -= 1;
+    if (keys['KeyD']) direction.x += 1;
+    direction.normalize();
 
-      velocity.x -= velocity.x * 15.0 * delta;
-      velocity.z -= velocity.z * 15.0 * delta;
-      velocity.y -= gravity * delta;
+    // Fixed: Correct left-right inverted movement
+    // Move relative to camera direction
+    const camDir = new THREE.Vector3();
+    camera.getWorldDirection(camDir);
+    camDir.y = 0;
+    camDir.normalize();
 
-      if (direction.length() > 0) {
-        velocity.x -= direction.x * speed * delta * -1;
-        velocity.z -= direction.z * speed * delta * -1;
-      }
+    // Get right vector
+    const camRight = new THREE.Vector3();
+    camRight.crossVectors(new THREE.Vector3(0,1,0), camDir).normalize();
 
-      if (keys['Space'] && canJump) {
-        velocity.y = 14;
-        canJump = false;
-      }
+    velocity.x = 0;
+    velocity.z = 0;
 
-      controls.moveRight(-velocity.x * delta);
-      controls.moveForward(-velocity.z * delta);
+    velocity.addScaledVector(camDir, direction.z * player.speed);
+    velocity.addScaledVector(camRight, direction.x * player.speed);
 
-      controls.getObject().position.y += velocity.y * delta;
+    // Gravity & jump
+    velocityYPlayer += gravity * delta;
 
-      if (controls.getObject().position.y < playerHeight) {
-        velocity.y = 0;
-        controls.getObject().position.y = playerHeight;
-        canJump = true;
-      }
+    // Check ground collision (y=0)
+    let pos = controls.getObject().position.clone();
 
-      resolvePlayerCollision();
+    pos.x += velocity.x * delta;
+    pos.z += velocity.z * delta;
 
-      for(let i=playerBullets.length-1; i>=0; i--) {
-        const b = playerBullets[i];
-        b.update(delta);
-        for(const e of enemies) {
-          if(e.health <= 0) continue;
-          if(b.mesh.position.distanceTo(e.mesh.position) < 1) {
-            e.damage(50);
-            b.destroy();
-            playerBullets.splice(i, 1);
-            break;
-          }
-        }
-        if(!b.alive) playerBullets.splice(i,1);
-      }
-
-      for(let i=enemyBullets.length-1; i>=0; i--) {
-        const b = enemyBullets[i];
-        b.update(delta);
-        if(b.mesh.position.distanceTo(controls.getObject().position) < 1.5) {
-          health -= 10;
-          healthText.textContent = health;
-          b.destroy();
-          enemyBullets.splice(i,1);
-          if(health <= 0) respawn();
-          continue;
-        }
-        if(!b.alive) enemyBullets.splice(i,1);
-      }
-
-      enemies.forEach(enemy => enemy.update(delta, controls.getObject().position));
+    // Check horizontal collisions
+    if (!playerCollides(pos)) {
+      controls.getObject().position.x = pos.x;
+      controls.getObject().position.z = pos.z;
     }
+
+    // Vertical
+    let nextY = controls.getObject().position.y + velocityYPlayer * delta;
+    if (nextY < player.height) {
+      // On ground
+      velocityYPlayer = 0;
+      controls.getObject().position.y = player.height;
+      canJumpPlayer = true;
+    } else {
+      // Falling or jumping
+      controls.getObject().position.y = nextY;
+      canJumpPlayer = false;
+    }
+
+    // Jump key
+    if (keys['Space'] && canJumpPlayer) {
+      velocityYPlayer = player.jumpSpeed;
+      canJumpPlayer = false;
+    }
+
+    // Enemies move and shoot
+    for (const enemy of enemies) {
+      enemyMove(enemy, delta);
+      enemyShoot(enemy, delta);
+      checkEnemyRespawn(enemy);
+    }
+
+    checkEnterHouse();
+
+    prevTime = time;
 
     renderer.render(scene, camera);
   }
 
-  function respawn() {
-    health = 100;
-    healthText.textContent = health;
-    controls.getObject().position.set(0, playerHeight, 40); // spawn in open area
-    velocity.set(0, 0, 0);
-  }
+  animate();
 
   window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth/window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
-
-  window.addEventListener('mousedown', () => {
-    if(!controls.isLocked) return;
-    const now = performance.now();
-    if(now - lastShotTime < shotCooldown) return;
-    if(ammo <= 0) return;
-    lastShotTime = now;
-    shoot();
-  });
-
-  respawn();
-  animate();
-
 })();
 </script>
+
 </body>
 </html>
