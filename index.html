@@ -106,10 +106,11 @@
     let canJump = false;
     const keys = {};
     let lastShotTime = 0;
+    let animationId;
 
     function init() {
       scene = new THREE.Scene();
-      scene.background = new THREE.Color(0x87ceeb); // sky blue
+      scene.background = new THREE.Color(0x87ceeb);
 
       camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 
@@ -159,7 +160,7 @@
         }
       }
 
-      // Houses (enterable via collision)
+      // Houses (enterable)
       const houseMat = new THREE.MeshStandardMaterial({ color: 0x8b4513, roughness: 0.8 });
       const windowMat = new THREE.MeshStandardMaterial({ color: 0x000000, opacity: 0.5, transparent: true });
       const houseGeo = new THREE.BoxGeometry(12, 8, 12);
@@ -201,7 +202,6 @@
         scene.add(house);
       }
 
-      // Controls
       controls = new PointerLockControls(camera, document.body);
       scene.add(controls.getObject());
       controls.getObject().position.set(0, 1.6, 350);
@@ -281,7 +281,7 @@
     }
 
     function animate() {
-      requestAnimationFrame(animate);
+      animationId = requestAnimationFrame(animate);
       if (isPaused) return;
 
       const delta = clock.getDelta();
@@ -416,6 +416,7 @@
           controls.unlock();
           hud.style.display = 'none';
           crosshair.style.display = 'none';
+          cancelAnimationFrame(animationId);
         }
       }
       keys[e.code] = true;
@@ -423,21 +424,26 @@
 
     window.addEventListener('keyup', e => keys[e.code] = false);
 
-    resumeGameBtn.onclick = () => {
+    resumeGameBtn.addEventListener('click', () => {
       pauseMenu.style.display = 'none';
       controls.lock();
       isPaused = false;
       hud.style.display = 'flex';
       crosshair.style.display = 'block';
-    };
+      animate();
+    });
 
-    returnToMenuBtn.onclick = () => location.reload();
+    returnToMenuBtn.addEventListener('click', () => {
+      location.reload();
+    });
 
-    startGameBtn.onclick = () => {
+    startGameBtn.addEventListener('click', () => {
       mainMenu.style.display = 'none';
+      hud.style.display = 'flex';
+      crosshair.style.display = 'block';
       init();
       animate();
-    };
+    });
   </script>
 </body>
 </html>
