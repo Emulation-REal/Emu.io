@@ -2,10 +2,10 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>Shipment FPS Map</title>
+<title>Airsoft Field FPS Map</title>
 <style>
   html, body {
-    margin: 0; padding: 0; overflow: hidden; height: 100%; background: #111;
+    margin: 0; padding: 0; overflow: hidden; height: 100%; background: #1b2a1b;
     font-family: Arial, sans-serif;
   }
   canvas { display: block; }
@@ -36,7 +36,7 @@
 <script>
 (() => {
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x202025);
+  scene.background = new THREE.Color(0x2b3a2b);
   const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
 
   const renderer = new THREE.WebGLRenderer({antialias:true});
@@ -54,92 +54,106 @@
   scene.add(controls.getObject());
 
   // Lighting
-  const ambientLight = new THREE.AmbientLight(0x666666);
+  const ambientLight = new THREE.AmbientLight(0x888888);
   scene.add(ambientLight);
 
-  const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-  dirLight.position.set(20, 40, 20);
+  const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
+  dirLight.position.set(30, 50, 30);
   dirLight.castShadow = true;
   dirLight.shadow.mapSize.width = 2048;
   dirLight.shadow.mapSize.height = 2048;
   scene.add(dirLight);
 
-  // Ground with grid texture to see map edges better
-  const gridTexture = new THREE.TextureLoader().load('https://threejs.org/examples/textures/grid.png');
-  gridTexture.wrapS = gridTexture.wrapT = THREE.RepeatWrapping;
-  gridTexture.repeat.set(25, 25);
-
+  // Ground with simple grass-like color
   const floorGeo = new THREE.PlaneGeometry(200, 200);
-  const floorMat = new THREE.MeshStandardMaterial({ map: gridTexture, roughness: 1, metalness: 0 });
+  const floorMat = new THREE.MeshStandardMaterial({color: 0x3b6a3b});
   const floor = new THREE.Mesh(floorGeo, floorMat);
   floor.rotation.x = -Math.PI/2;
   floor.receiveShadow = true;
   scene.add(floor);
 
-  // Container geometry & colors
-  const containerGeo = new THREE.BoxGeometry(8,4,8);
-  const containerColors = [0x8B0000, 0x004080, 0x2E8B57, 0xDAA520, 0x8B4513];
+  // Jersey Barrier (concrete barricade)
+  const barrierGeo = new THREE.BoxGeometry(6, 2, 1.5);
+  const barrierMat = new THREE.MeshStandardMaterial({color: 0x909090, roughness: 0.8, metalness: 0.1});
 
-  // Shipment container layout — carefully placed to look like real Shipment map
-  // Coordinates adapted from an overhead Shipment map scaled to our world units
-  const containerPositions = [
-    // Bottom row (back of map)
-    {x:-24, y:2, z:-24},
-    {x:-16, y:2, z:-24},
-    {x:-8,  y:2, z:-24},
-    {x:0,   y:2, z:-24},
-    {x:8,   y:2, z:-24},
-    {x:16,  y:2, z:-24},
-    {x:24,  y:2, z:-24},
+  // Fake house components
+  function createHouse(x, z) {
+    const house = new THREE.Group();
 
-    // Second row from bottom (some stacked containers)
-    {x:-20, y:2, z:-16},
-    {x:-20, y:6, z:-16}, // stacked container
-    {x:-12, y:2, z:-16},
-    {x:-4,  y:2, z:-16},
-    {x:4,   y:2, z:-16},
-    {x:12,  y:2, z:-16},
-    {x:20,  y:2, z:-16},
+    // Walls
+    const wallGeo = new THREE.BoxGeometry(8, 5, 6);
+    const wallMat = new THREE.MeshStandardMaterial({color: 0x776655, roughness: 0.7});
+    const walls = new THREE.Mesh(wallGeo, wallMat);
+    walls.castShadow = true;
+    walls.position.y = 2.5;
+    house.add(walls);
 
-    // Middle row
-    {x:-24, y:2, z:-8},
-    {x:-16, y:2, z:-8},
-    {x:-8,  y:2, z:-8},
-    {x:0,   y:2, z:-8},
-    {x:8,   y:2, z:-8},
-    {x:16,  y:2, z:-8},
-    {x:24,  y:2, z:-8},
+    // Windows (simple rectangles with emissive blue)
+    const windowGeo = new THREE.PlaneGeometry(2, 2);
+    const windowMat = new THREE.MeshStandardMaterial({color: 0x223355, emissive: 0x3355aa, transparent: true, opacity: 0.7});
+    const win1 = new THREE.Mesh(windowGeo, windowMat);
+    win1.position.set(-2, 3, 3.01);
+    house.add(win1);
+    const win2 = win1.clone();
+    win2.position.set(2, 3, 3.01);
+    house.add(win2);
 
-    // Fourth row with stacks
-    {x:-20, y:2, z:0},
-    {x:-20, y:6, z:0},
-    {x:-12, y:2, z:0},
-    {x:-4,  y:2, z:0},
-    {x:4,   y:2, z:0},
-    {x:12,  y:2, z:0},
-    {x:20,  y:2, z:0},
+    // Door
+    const doorGeo = new THREE.BoxGeometry(2, 4, 0.2);
+    const doorMat = new THREE.MeshStandardMaterial({color: 0x552211});
+    const door = new THREE.Mesh(doorGeo, doorMat);
+    door.position.set(0, 2, -3.1);
+    house.add(door);
 
-    // Top row (front of map)
-    {x:-24, y:2, z:8},
-    {x:-16, y:2, z:8},
-    {x:-8,  y:2, z:8},
-    {x:0,   y:2, z:8},
-    {x:8,   y:2, z:8},
-    {x:16,  y:2, z:8},
-    {x:24,  y:2, z:8}
-  ];
-
-  const containers = [];
-  for(const pos of containerPositions) {
-    const color = containerColors[Math.floor(Math.random()*containerColors.length)];
-    const mat = new THREE.MeshStandardMaterial({color, roughness:0.7, metalness:0.1});
-    const container = new THREE.Mesh(containerGeo, mat);
-    container.position.set(pos.x, pos.y, pos.z);
-    container.castShadow = true;
-    container.receiveShadow = true;
-    scene.add(container);
-    containers.push(container);
+    house.position.set(x, 0, z);
+    scene.add(house);
+    return house;
   }
+
+  // Crate/barrel for extra cover
+  function createCrate(x,z) {
+    const crateGeo = new THREE.BoxGeometry(2.5,2.5,2.5);
+    const crateMat = new THREE.MeshStandardMaterial({color: 0x4b2e00});
+    const crate = new THREE.Mesh(crateGeo, crateMat);
+    crate.position.set(x,1.25,z);
+    crate.castShadow = true;
+    scene.add(crate);
+    return crate;
+  }
+
+  // Setup barriers in a zig-zag pattern
+  const barriers = [];
+  const barrierPositions = [
+    [-20, -10], [-10, -5], [0, -10], [10, -5], [20, -10],
+    [-20, 10], [-10, 5], [0, 10], [10, 5], [20, 10]
+  ];
+  for(const [x,z] of barrierPositions) {
+    const b = new THREE.Mesh(barrierGeo, barrierMat);
+    b.position.set(x, 1, z);
+    b.castShadow = true;
+    b.receiveShadow = true;
+    scene.add(b);
+    barriers.push(b);
+  }
+
+  // Create some fake houses
+  const houses = [];
+  houses.push(createHouse(-25, 20));
+  houses.push(createHouse(25, 20));
+  houses.push(createHouse(-25, -20));
+  houses.push(createHouse(25, -20));
+  houses.push(createHouse(0, 25));
+
+  // Create some crates scattered
+  const crates = [];
+  crates.push(createCrate(-10, 0));
+  crates.push(createCrate(15, 0));
+  crates.push(createCrate(0, -15));
+  crates.push(createCrate(5, 15));
+  crates.push(createCrate(-15, 15));
+
+  // Combine all obstacles for collision
+  const obstacles = [...barriers, ...houses, ...crates];
 
   // Player variables
   let health = 100;
@@ -209,6 +223,7 @@
     ammoText.textContent = `${ammo} / ${maxAmmo}`;
   }
 
+  // Simple enemy class
   class Enemy {
     constructor() {
       const geo = new THREE.BoxGeometry(1, 2, 1);
@@ -218,10 +233,10 @@
       do {
         this.mesh.position.set((Math.random() - 0.5) * 80, 1, (Math.random() - 0.5) * 80);
         tries++;
-      } while (checkCollision(this.mesh.position, containers, 3) && tries < 20);
+      } while (checkCollision(this.mesh.position, obstacles, 3) && tries < 20);
       this.mesh.castShadow = true;
       this.health = 100;
-      this.speed = 6; // slightly faster enemy speed
+      this.speed = 8; // faster enemy speed
       this.lastShot = 0;
       this.shootInterval = 1500;
       scene.add(this.mesh);
@@ -236,12 +251,12 @@
       if (distance > 3) {
         const moveStep = dirToPlayer.clone().multiplyScalar(this.speed * delta);
         const newPos = this.mesh.position.clone().add(moveStep);
-        if (!checkCollision(newPos, containers, 4)) {
+        if (!checkCollision(newPos, obstacles, 4)) {
           this.mesh.position.copy(newPos);
         }
       }
 
-      if (distance < 20) {
+      if (distance < 25) {
         const now = performance.now();
         if (now - this.lastShot > this.shootInterval) {
           this.lastShot = now;
@@ -253,7 +268,7 @@
       const dir = targetPos.clone().sub(this.mesh.position).normalize();
       const bulletPos = this.mesh.position.clone();
       bulletPos.y += 1.2;
-      const bullet = new Bullet(bulletPos, dir, 50, 0xff0000);
+      const bullet = new Bullet(bulletPos, dir, 60, 0xff0000);
       enemyBullets.push(bullet);
     }
     damage(amount) {
@@ -265,15 +280,15 @@
   }
 
   const enemies = [];
-  for(let i=0; i<6; i++) enemies.push(new Enemy());
+  for(let i=0; i<8; i++) enemies.push(new Enemy());
 
   function checkCollision(position, objects, halfSize=1) {
     for(const obj of objects) {
       const objPos = obj.position;
       if(
-        Math.abs(position.x - objPos.x) < halfSize + 4 &&
-        Math.abs(position.y - objPos.y) < 2 + 2 &&
-        Math.abs(position.z - objPos.z) < halfSize + 4
+        Math.abs(position.x - objPos.x) < halfSize + (obj.geometry ? obj.geometry.parameters.width/2 : 4) &&
+        Math.abs(position.y - objPos.y) < halfSize + (obj.geometry ? obj.geometry.parameters.height/2 : 2) &&
+        Math.abs(position.z - objPos.z) < halfSize + (obj.geometry ? obj.geometry.parameters.depth/2 : 4)
       ) {
         return true;
       }
@@ -283,16 +298,23 @@
 
   function resolvePlayerCollision() {
     const pos = controls.getObject().position;
-    for(const cont of containers) {
-      const dx = pos.x - cont.position.x;
-      const dz = pos.z - cont.position.z;
-      const overlapX = 4 + 0.3 - Math.abs(dx);
-      const overlapZ = 4 + 0.3 - Math.abs(dz);
-      if(overlapX > 0 && overlapZ > 0 && pos.y < 5) {
+    for(const obj of obstacles) {
+      const dx = pos.x - obj.position.x;
+      const dy = pos.y - (obj.position.y + (obj.geometry ? obj.geometry.parameters.height/2 : 2));
+      const dz = pos.z - obj.position.z;
+      const hw = obj.geometry ? obj.geometry.parameters.width/2 : 4;
+      const hh = obj.geometry ? obj.geometry.parameters.height/2 : 2;
+      const hd = obj.geometry ? obj.geometry.parameters.depth/2 : 4;
+
+      const overlapX = hw + 0.3 - Math.abs(dx);
+      const overlapY = hh + 1 - Math.abs(dy);
+      const overlapZ = hd + 0.3 - Math.abs(dz);
+
+      if(overlapX > 0 && overlapY > 0 && overlapZ > 0) {
         if(overlapX < overlapZ) {
-          pos.x += dx > 0 ? overlapX : -overlapX;
+          controls.getObject().position.x += dx > 0 ? overlapX : -overlapX;
         } else {
-          pos.z += dz > 0 ? overlapZ : -overlapZ;
+          controls.getObject().position.z += dz > 0 ? overlapZ : -overlapZ;
         }
       }
     }
@@ -301,8 +323,9 @@
   // Player movement variables
   const playerHeight = 1.6;
   velocity.set(0, 0, 0);
-  const gravity = 30;
-  const speed = 30; // increased speed x2 from before
+  const gravity = 40;
+  const speed = 60; // MUCH faster movement speed
+
   canJump = false;
 
   let lastShotTime = 0;
@@ -319,8 +342,8 @@
       direction.x = Number(keys['KeyD']) - Number(keys['KeyA']);
       direction.normalize();
 
-      velocity.x -= velocity.x * 10.0 * delta;
-      velocity.z -= velocity.z * 10.0 * delta;
+      velocity.x -= velocity.x * 15.0 * delta;
+      velocity.z -= velocity.z * 15.0 * delta;
       velocity.y -= gravity * delta;
 
       if (direction.length() > 0) {
@@ -329,7 +352,7 @@
       }
 
       if (keys['Space'] && canJump) {
-        velocity.y = 12;
+        velocity.y = 14;
         canJump = false;
       }
 
@@ -384,7 +407,7 @@
   function respawn() {
     health = 100;
     healthText.textContent = health;
-    controls.getObject().position.set(0, playerHeight, 30); // spawn in front of map, outside containers
+    controls.getObject().position.set(0, playerHeight, 40); // spawn in open area
     velocity.set(0, 0, 0);
   }
 
