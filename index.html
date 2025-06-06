@@ -229,6 +229,14 @@
           if (health <= 0) {
             alert("You Died!");
             location.reload();
+            window.myGame = {
+  scene,
+  camera,
+  controls,
+  enemies,
+  player,  // if you have a player object
+};
+
           }
         }
       });
