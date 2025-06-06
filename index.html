@@ -1,559 +1,214 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Emu.io</title>
-  <style>
-    body, html {
-      margin: 0; padding: 0; overflow: hidden;
-      height: 100%; background-color: #111;
-      font-family: Arial, sans-serif;
-      color: white;
-      user-select: none;
-    }
-    #start-screen, #pause-menu {
-      position: absolute;
-      width: 100vw; height: 100vh;
-      background: linear-gradient(180deg, #111, #000);
-      display: flex; flex-direction: column;
-      justify-content: center; align-items: center;
-      z-index: 100;
-    }
-    #start-screen button, #pause-menu button {
-      font-size: 24px;
-      padding: 15px 30px;
-      cursor: pointer;
-      border: none;
-      border-radius: 10px;
-      background: #28a745;
-      color: white;
-      margin: 10px;
-      transition: background 0.3s ease;
-    }
-    #start-screen button:hover, #pause-menu button:hover {
-      background: #218838;
-    }
-    #hud {
-      position: absolute;
-      top: 20px;
-      left: 20px;
-      font-weight: bold;
-      font-size: 18px;
-      display: none;
-      z-index: 10;
-    }
-    #health-bar {
-      width: 200px;
-      height: 25px;
-      background: #550000;
-      border-radius: 5px;
-      overflow: hidden;
-      box-shadow: 0 0 10px #aa0000 inset;
-      position: relative;
-    }
-    #health-bar-fill {
-      height: 100%;
-      background: linear-gradient(90deg, #ff4444, #aa0000);
-      width: 100%;
-      transition: width 0.2s ease-out;
-      box-shadow: 0 0 10px #ff0000;
-    }
-    #health-text {
-      position: absolute;
-      width: 100%;
-      text-align: center;
-      line-height: 25px;
-      color: white;
-      font-weight: bold;
-      pointer-events: none;
-      user-select: none;
-    }
-    canvas {
-      display: block;
-      width: 100vw;
-      height: 100vh;
-      outline: none;
-      cursor: crosshair;
-    }
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>FPS with Crosshair & Bullet Counter</title>
+<style>
+  /* Full screen canvas */
+  body, html {
+    margin: 0; padding: 0; overflow: hidden; height: 100%;
+    background: #1a1a1a;
+    font-family: Arial, sans-serif;
+  }
+  canvas {
+    display: block;
+    background: #2b2b2b;
+    margin: 0 auto;
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+  }
+
+  /* Crosshair style */
+  #crosshair {
+    position: fixed;
+    top: 50%; left: 50%;
+    width: 30px; height: 30px;
+    margin-left: -15px; margin-top: -15px;
+    pointer-events: none;
+    z-index: 10;
+  }
+  #crosshair div {
+    position: absolute;
+    background: #0aff0a;
+  }
+  #crosshair .line {
+    width: 2px;
+    height: 10px;
+    top: 10px;
+    left: 14px;
+  }
+  #crosshair .line.left {
+    width: 10px;
+    height: 2px;
+    top: 14px;
+    left: 0;
+  }
+  #crosshair .line.right {
+    width: 10px;
+    height: 2px;
+    top: 14px;
+    right: 0;
+  }
+  #crosshair .line.top {
+    width: 2px;
+    height: 10px;
+    top: 0;
+    left: 14px;
+  }
+  #crosshair .line.bottom {
+    width: 2px;
+    height: 10px;
+    bottom: 0;
+    left: 14px;
+  }
+
+  /* Bullet counter */
+  #bulletCounter {
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    color: #0aff0a;
+    font-size: 24px;
+    user-select: none;
+    z-index: 10;
+    font-weight: bold;
+    text-shadow: 0 0 5px #0aff0a;
+  }
+</style>
 </head>
 <body>
-  <div id="start-screen">
-    <h1>Emu.io</h1>
-    <button id="start-btn">Start Game</button>
-    <p>Click inside the game to lock pointer and control camera</p>
-  </div>
 
-  <div id="pause-menu" style="display:none;">
-    <h2>Paused</h2>
-    <button id="resume-btn">Resume</button>
-    <button id="mainmenu-btn">Main Menu</button>
-  </div>
+<!-- Crosshair HTML -->
+<div id="crosshair">
+  <div class="line top"></div>
+  <div class="line bottom"></div>
+  <div class="line left"></div>
+  <div class="line right"></div>
+</div>
 
-  <div id="hud">
-    <div id="health-bar">
-      <div id="health-bar-fill"></div>
-      <div id="health-text">100</div>
-    </div>
-  </div>
+<!-- Bullet Counter -->
+<div id="bulletCounter">Bullets: 30</div>
 
-  <canvas id="game-canvas" tabindex="0"></canvas>
+<!-- Canvas -->
+<canvas id="gameCanvas"></canvas>
 
-  <audio id="main-music" loop src="https://cdn.pixabay.com/download/audio/2022/03/18/audio_2f74f7a1de.mp3?filename=game-background-ambient-6392.mp3" preload="auto"></audio>
-  <audio id="shoot-sfx" src="https://cdn.pixabay.com/download/audio/2022/03/24/audio_858f1df658.mp3?filename=gun-shot-6051.mp3" preload="auto"></audio>
-  <audio id="damage-sfx" src="https://cdn.pixabay.com/download/audio/2022/03/18/audio_9f5c23d18e.mp3?filename=hit-6067.mp3" preload="auto"></audio>
-  <audio id="reload-sfx" src="https://cdn.pixabay.com/download/audio/2022/03/24/audio_5ff6b96407.mp3?filename=gun-reload-6053.mp3" preload="auto"></audio>
-  <audio id="footstep-sfx" src="https://cdn.pixabay.com/download/audio/2022/03/23/audio_d65f3dfbb3.mp3?filename=footstep-6041.mp3" preload="auto"></audio>
+<script>
+  // Setup canvas and context
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
 
-  <script src="https://cdn.jsdelivr.net/npm/three@0.125.2/build/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.125.2/examples/js/controls/PointerLockControls.js"></script>
+  // Resize canvas to full window
+  function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+  }
+  window.addEventListener('resize', resize);
+  resize();
 
-  <script>
-    const startBtn = document.getElementById('start-btn');
-    const startScreen = document.getElementById('start-screen');
-    const pauseMenu = document.getElementById('pause-menu');
-    const resumeBtn = document.getElementById('resume-btn');
-    const mainMenuBtn = document.getElementById('mainmenu-btn');
-    const hud = document.getElementById('hud');
-    const healthBarFill = document.getElementById('health-bar-fill');
-    const healthText = document.getElementById('health-text');
-    const canvas = document.getElementById('game-canvas');
+  // Map data - simulate container yard with rectangles
+  const containers = [
+    {x: 100, y: 100, w: 160, h: 80, color: '#444444'},
+    {x: 280, y: 120, w: 200, h: 100, color: '#555555'},
+    {x: 520, y: 100, w: 120, h: 140, color: '#666666'},
+    {x: 180, y: 250, w: 220, h: 80, color: '#4a4a4a'},
+    {x: 460, y: 280, w: 180, h: 110, color: '#5a5a5a'},
+    {x: 680, y: 150, w: 150, h: 150, color: '#444444'},
+    {x: 850, y: 300, w: 100, h: 60, color: '#555555'},
+  ];
 
-    const mainMusic = document.getElementById('main-music');
-    const shootSfx = document.getElementById('shoot-sfx');
-    const damageSfx = document.getElementById('damage-sfx');
-    const reloadSfx = document.getElementById('reload-sfx');
-    const footstepSfx = document.getElementById('footstep-sfx');
-
-    let scene, camera, renderer, controls;
-    let bullets = [];
-    let bots = [];
-    let health = 100;
-    let velocityY = 0;
-    let onGround = false;
-    const gravity = -0.015;
-    const keys = {};
-    let canShoot = true;
-    let currentGun = 'pistol';
-    let ammo = { pistol: 15, ar: 30, shotgun: 6 };
-    let maxAmmo = { pistol: 15, ar: 30, shotgun: 6 };
-    let reloading = false;
-    let shootCooldown = 0;
-    let gamePaused = false;
-
-    startBtn.onclick = () => {
-      startScreen.style.display = 'none';
-      hud.style.display = 'block';
-      mainMusic.volume = 0.15;
-      mainMusic.play();
-      init();
-      animate();
-      canvas.focus();
-    };
-
-    resumeBtn.onclick = () => {
-      gamePaused = false;
-      pauseMenu.style.display = 'none';
-      mainMusic.play();
-      canvas.focus();
-    };
-
-    mainMenuBtn.onclick = () => {
-      location.reload();
-    };
-
-    function init() {
-      scene = new THREE.Scene();
-      scene.background = new THREE.Color(0x111111);
-
-      camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-      camera.position.set(0, 1.6, 5);
-
-      renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-      renderer.setSize(window.innerWidth, window.innerHeight);
-
-      // Lighting
-      const ambientLight = new THREE.AmbientLight(0x606060);
-      scene.add(ambientLight);
-
-      const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
-      directionalLight.position.set(10, 20, 10);
-      scene.add(directionalLight);
-
-      // Ground with texture-like grid
-      const groundGeo = new THREE.PlaneGeometry(100, 100, 20, 20);
-      const gridHelper = new THREE.GridHelper(100, 20, 0x444444, 0x222222);
-      scene.add(gridHelper);
-      const groundMat = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.8 });
-      const ground = new THREE.Mesh(groundGeo, groundMat);
-      ground.rotation.x = -Math.PI / 2;
-      scene.add(ground);
-
-      // Walls around
-      const wallGeo = new THREE.BoxGeometry(100, 5, 1);
-      const wallMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
-      let wall1 = new THREE.Mesh(wallGeo, wallMat);
-      wall1.position.set(0, 2.5, -50);
-      scene.add(wall1);
-      let wall2 = new THREE.Mesh(wallGeo, wallMat);
-      wall2.position.set(0, 2.5, 50);
-      scene.add(wall2);
-      let wall3 = new THREE.Mesh(new THREE.BoxGeometry(1, 5, 100), wallMat);
-      wall3.position.set(-50, 2.5, 0);
-      scene.add(wall3);
-      let wall4 = new THREE.Mesh(new THREE.BoxGeometry(1, 5, 100), wallMat);
-      wall4.position.set(50, 2.5, 0);
-      scene.add(wall4);
-
-      // Controls
-      controls = new THREE.PointerLockControls(camera, document.body);
-      scene.add(controls.getObject());
-
-      // Pointer lock request on canvas click (IMPORTANT!)
-      canvas.addEventListener('click', () => {
-        if (!controls.isLocked && !gamePaused) controls.lock();
-      });
-
-      // Gun models
-      createGunModels();
-
-      // Spawn bots
-      for(let i = 0; i < 12; i++) {
-        spawnBot((Math.random() - 0.5) * 90, (Math.random() - 0.5) * 90);
-      }
-
-      // Events
-      document.addEventListener('keydown', e => {
-        keys[e.code] = true;
-        if (e.code === 'KeyR') reloadGun();
-        if (e.code === 'Escape') togglePause();
-      });
-      document.addEventListener('keyup', e => keys[e.code] = false);
-      document.addEventListener('mousedown', shoot);
-
-      window.addEventListener('resize', onWindowResize);
+  // Player data
+  const player = {
+    x: canvas.width / 2,
+    y: canvas.height / 2,
+    width: 40,
+    height: 20,
+    speed: 5,
+    bullets: 30,
+    gun: {
+      width: 60,
+      height: 20,
+      barrelLength: 40,
+      color: '#0aff0a'
     }
+  };
 
-    function createGunModels() {
-      // Pistol
-      const pistolGeo = new THREE.BoxGeometry(0.3, 0.15, 0.6);
-      const pistolMat = new THREE.MeshStandardMaterial({ color: 0x5555ff });
-      const pistol = new THREE.Mesh(pistolGeo, pistolMat);
-      pistol.position.set(0.5, -0.5, -1);
-      pistol.name = 'pistol';
-      camera.add(pistol);
+  // Keyboard state
+  const keys = {};
+  window.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
+  window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
 
-      // AR
-      const arGeo = new THREE.BoxGeometry(0.4, 0.2, 1.2);
-      const arMat = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
-      const ar = new THREE.Mesh(arGeo, arMat);
-      ar.position.set(0.5, -0.55, -1);
-      ar.name = 'ar';
-      ar.visible = false;
-      camera.add(ar);
+  // Bullet counter UI
+  const bulletCounter = document.getElementById('bulletCounter');
 
-      // Shotgun
-      const shotgunGeo = new THREE.BoxGeometry(0.5, 0.25, 1);
-      const shotgunMat = new THREE.MeshStandardMaterial({ color: 0xff5500 });
-      const shotgun = new THREE.Mesh(shotgunGeo, shotgunMat);
-      shotgun.position.set(0.5, -0.5, -1);
-      shotgun.name = 'shotgun';
-      shotgun.visible = false;
-      camera.add(shotgun);
-    }
+  // Game loop
+  function gameLoop() {
+    // Clear screen
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    function setGunVisible(name) {
-      camera.children.forEach(child => {
-        child.visible = (child.name === name);
-      });
-    }
+    // Draw map containers
+    containers.forEach(container => {
+      ctx.fillStyle = container.color;
+      ctx.fillRect(container.x, container.y, container.w, container.h);
 
-    function shoot() {
-      if (!controls.isLocked || gamePaused || reloading) return;
-      if (!canShoot) return;
-      if (ammo[currentGun] <= 0) {
-        reloadGun();
-        return;
-      }
-      canShoot = false;
-      shootCooldown = currentGun === 'ar' ? 5 : currentGun === 'shotgun' ? 20 : 15; // frames cooldown
-
-      ammo[currentGun]--;
-      shootSfx.currentTime = 0;
-      shootSfx.play();
-      if (currentGun === 'shotgun') {
-        // shotgun shoots multiple pellets
-        for(let i=0; i<6; i++) {
-          shootBullet(0.05 * (Math.random() - 0.5), 0.05 * (Math.random() - 0.5));
-        }
-      } else {
-        shootBullet(0,0);
-      }
-    }
-
-    function shootBullet(spreadX, spreadY) {
-      const bulletGeo = new THREE.SphereGeometry(0.07, 8, 8);
-      const bulletMat = new THREE.MeshStandardMaterial({ color: 0xffff00 });
-      const bullet = new THREE.Mesh(bulletGeo, bulletMat);
-      bullet.position.copy(camera.position);
-      const dir = new THREE.Vector3();
-      camera.getWorldDirection(dir);
-      dir.x += spreadX;
-      dir.y += spreadY;
-      dir.normalize();
-      bullet.velocity = dir.multiplyScalar(1.8 + Math.random() * 0.3);
-      bullet.life = 100;
-      scene.add(bullet);
-      bullets.push(bullet);
-    }
-
-    function reloadGun() {
-      if (reloading || ammo[currentGun] === maxAmmo[currentGun]) return;
-      reloading = true;
-      reloadSfx.currentTime = 0;
-      reloadSfx.play();
-      setTimeout(() => {
-        ammo[currentGun] = maxAmmo[currentGun];
-        reloading = false;
-      }, 2000);
-    }
-
-    function spawnBot(x, z) {
-      const botGeo = new THREE.BoxGeometry(1, 2, 1);
-      const botMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
-      const bot = new THREE.Mesh(botGeo, botMat);
-      bot.position.set(x, 1, z);
-      bot.health = 100;
-      bot.canShoot = true;
-      bot.shootCooldown = 0;
-      bot.gun = randomBotGun();
-      scene.add(bot);
-      bots.push(bot);
-    }
-
-    function randomBotGun() {
-      const guns = ['pistol', 'ar', 'shotgun'];
-      return guns[Math.floor(Math.random() * guns.length)];
-    }
-
-    function updateMovement() {
-      if (!controls.isLocked || gamePaused) return;
-
-      const speed = 0.12;
-      let moved = false;
-
-      if (keys['KeyW']) {
-        controls.moveForward(speed);
-        moved = true;
-      }
-      if (keys['KeyS']) {
-        controls.moveForward(-speed);
-        moved = true;
-      }
-      if (keys['KeyA']) {
-        controls.moveRight(-speed);
-        moved = true;
-      }
-      if (keys['KeyD']) {
-        controls.moveRight(speed);
-        moved = true;
-      }
-
-      if (keys['Space'] && onGround) {
-        velocityY = 0.3;
-        onGround = false;
-      }
-
-      if(moved && !footstepSfx.paused){
-        if(footstepSfx.paused) footstepSfx.play();
-      } else {
-        footstepSfx.pause();
-        footstepSfx.currentTime = 0;
-      }
-
-      // Gravity
-      controls.getObject().position.y += velocityY;
-      velocityY += gravity;
-
-      if (controls.getObject().position.y < 1.6) {
-        controls.getObject().position.y = 1.6;
-        velocityY = 0;
-        onGround = true;
-      }
-    }
-
-    function updateBullets() {
-      bullets.forEach((b, idx) => {
-        b.position.add(b.velocity);
-        b.life--;
-
-        if (b.position.distanceTo(camera.position) > 100 || b.life <= 0) {
-          scene.remove(b);
-          bullets.splice(idx, 1);
-          return;
-        }
-
-        bots.forEach((bot, botIdx) => {
-          if (bot.health > 0 && b.position.distanceTo(bot.position) < 1) {
-            bot.health -= currentGun === 'shotgun' ? 40 : 20;
-            scene.remove(b);
-            bullets.splice(idx, 1);
-            if (bot.health <= 0) {
-              scene.remove(bot);
-              bots.splice(botIdx, 1);
-            }
-          }
-        });
-      });
-    }
-
-    function updateBots() {
-      if (gamePaused) return;
-
-      bots.forEach(bot => {
-        if (bot.health <= 0) return;
-
-        // Move bot towards player
-        const playerPos = controls.getObject().position;
-        const direction = new THREE.Vector3().subVectors(playerPos, bot.position);
-        const dist = direction.length();
-        direction.normalize();
-
-        if(dist > 2){
-          bot.position.add(direction.multiplyScalar(0.015));
-        }
-
-        // Shoot randomly when player visible and in range
-        if (bot.canShoot && dist < 25) {
-          // Basic line of sight check
-          if (!bot.isReloading && Math.random() < 0.01) {
-            bot.canShoot = false;
-            bot.shootCooldown = bot.gun === 'ar' ? 10 : bot.gun === 'shotgun' ? 30 : 20;
-
-            // shoot bullet towards player with spread
-            shootBotBullet(bot, playerPos);
-
-            setTimeout(() => {
-              bot.canShoot = true;
-            }, bot.shootCooldown * 16);
-          }
-        }
-
-        // Damage player if close
-        if (dist < 1.5) {
-          if (!gamePaused) {
-            health -= 0.15;
-            if (health < 0) health = 0;
-            updateHealthBar();
-            if (health === 0) {
-              damageSfx.play();
-              respawnPlayer();
-            } else {
-              damageSfx.play();
-            }
-          }
-        }
-      });
-    }
-
-    function shootBotBullet(bot, targetPos) {
-      const bulletGeo = new THREE.SphereGeometry(0.06, 8, 8);
-      const bulletMat = new THREE.MeshStandardMaterial({ color: 0xffaa00 });
-      const bullet = new THREE.Mesh(bulletGeo, bulletMat);
-      bullet.position.copy(bot.position).add(new THREE.Vector3(0,1,0));
-      const dir = new THREE.Vector3().subVectors(targetPos, bot.position).normalize();
-
-      // Add some spread
-      dir.x += (Math.random() - 0.5) * 0.1;
-      dir.y += (Math.random() - 0.5) * 0.05;
-      dir.z += (Math.random() - 0.5) * 0.1;
-      dir.normalize();
-
-      bullet.velocity = dir.multiplyScalar(1.8);
-      bullet.life = 100;
-      bullet.isBotBullet = true;
-      scene.add(bullet);
-      bullets.push(bullet);
-    }
-
-    function updateHealthBar() {
-      const percent = Math.max(0, health);
-      healthBarFill.style.width = percent + '%';
-      healthText.textContent = Math.floor(percent);
-      if (percent > 60) {
-        healthBarFill.style.background = 'linear-gradient(90deg, #44ff44, #00aa00)';
-        healthBarFill.style.boxShadow = '0 0 10px #0f0';
-      } else if (percent > 30) {
-        healthBarFill.style.background = 'linear-gradient(90deg, #ffff44, #aaaa00)';
-        healthBarFill.style.boxShadow = '0 0 10px #ff0';
-      } else {
-        healthBarFill.style.background = 'linear-gradient(90deg, #ff4444, #aa0000)';
-        healthBarFill.style.boxShadow = '0 0 10px #f00';
-      }
-    }
-
-    function respawnPlayer() {
-      health = 100;
-      updateHealthBar();
-      controls.getObject().position.set(0, 1.6, 5);
-      bullets.forEach(b => scene.remove(b));
-      bullets = [];
-    }
-
-    function togglePause() {
-      if (!controls.isLocked && !gamePaused) return; // Only toggle pause if locked or already paused
-      gamePaused = !gamePaused;
-      if (gamePaused) {
-        pauseMenu.style.display = 'flex';
-        mainMusic.pause();
-        controls.unlock();
-      } else {
-        pauseMenu.style.display = 'none';
-        mainMusic.play();
-        controls.lock();
-      }
-    }
-
-    function onWindowResize() {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    }
-
-    function animate() {
-      requestAnimationFrame(animate);
-
-      if (!gamePaused && controls.isLocked) {
-        updateMovement();
-        updateBullets();
-        updateBots();
-
-        if (shootCooldown > 0) {
-          shootCooldown--;
-        } else {
-          canShoot = true;
-        }
-      }
-
-      renderer.render(scene, camera);
-    }
-
-    // Gun switch with keys 1, 2, 3
-    document.addEventListener('keydown', e => {
-      if (e.code === 'Digit1') {
-        currentGun = 'pistol';
-        setGunVisible('pistol');
-      } else if (e.code === 'Digit2') {
-        currentGun = 'ar';
-        setGunVisible('ar');
-      } else if (e.code === 'Digit3') {
-        currentGun = 'shotgun';
-        setGunVisible('shotgun');
-      }
+      // Container edges
+      ctx.strokeStyle = '#222';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(container.x, container.y, container.w, container.h);
     });
 
-    // Initialize health bar with full health at start
-    updateHealthBar();
-  </script>
+    // Move player with WASD
+    if (keys['w'] || keys['arrowup']) player.y -= player.speed;
+    if (keys['s'] || keys['arrowdown']) player.y += player.speed;
+    if (keys['a'] || keys['arrowleft']) player.x -= player.speed;
+    if (keys['d'] || keys['arrowright']) player.x += player.speed;
+
+    // Keep player inside bounds
+    player.x = Math.max(0, Math.min(canvas.width - player.width, player.x));
+    player.y = Math.max(0, Math.min(canvas.height - player.height, player.y));
+
+    // Draw player as a rectangle with a gun shape
+    // Player body
+    ctx.fillStyle = '#0aff0a';
+    ctx.fillRect(player.x, player.y, player.width, player.height);
+    // Gun base
+    ctx.fillStyle = '#00cc00';
+    ctx.fillRect(player.x + player.width - 10, player.y + 5, player.gun.width, player.gun.height);
+    // Gun barrel
+    ctx.fillStyle = '#007700';
+    ctx.fillRect(player.x + player.width - 10 + player.gun.width, player.y + 8, player.gun.barrelLength, 4);
+
+    requestAnimationFrame(gameLoop);
+  }
+  gameLoop();
+
+  // Shooting mechanic
+  window.addEventListener('mousedown', e => {
+    if (player.bullets > 0) {
+      player.bullets--;
+      bulletCounter.textContent = `Bullets: ${player.bullets}`;
+      // Simple muzzle flash effect
+      const flashX = player.x + player.width - 10 + player.gun.width + player.gun.barrelLength;
+      const flashY = player.y + 10;
+      drawMuzzleFlash(flashX, flashY);
+    } else {
+      // Optional: play empty clip sound or feedback
+    }
+  });
+
+  function drawMuzzleFlash(x, y) {
+    ctx.save();
+    ctx.fillStyle = 'yellow';
+    ctx.beginPath();
+    ctx.arc(x, y, 10, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // Clear flash after short delay
+    setTimeout(() => {
+      ctx.clearRect(x - 12, y - 12, 24, 24);
+    }, 50);
+  }
+</script>
 </body>
 </html>
