@@ -2,28 +2,23 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Emu.io - 3D FPS</title>
+  <title>Emu.io - Container Map FPS</title>
   <style>
     html, body {
-      margin: 0;
-      padding: 0;
-      overflow: hidden;
-      font-family: "Segoe UI", sans-serif;
-      background: #000;
-    }
-    canvas {
-      display: block;
+      margin: 0; padding: 0; overflow: hidden;
+      height: 100%; background-color: #222;
+      font-family: Arial, sans-serif;
+      color: white;
+      user-select: none;
     }
     #hud {
       position: absolute;
-      top: 10px;
-      left: 10px;
-      z-index: 5;
-      color: white;
+      top: 20px; left: 20px;
+      z-index: 10;
       font-size: 18px;
-      display: flex;
-      flex-direction: column;
-      user-select: none;
+      background: rgba(0,0,0,0.4);
+      padding: 8px 12px;
+      border-radius: 6px;
     }
     #crosshair {
       position: absolute;
@@ -34,23 +29,24 @@
       background: white;
       margin-left: -2px;
       margin-top: -2px;
-      z-index: 5;
+      z-index: 10;
     }
   </style>
 </head>
 <body>
   <div id="hud">
-    <div>Health: <span id="healthText">100</span></div>
-    <div>Ammo: <span id="ammoText">10 / 10</span></div>
+    Health: <span id="healthText">100</span><br />
+    Ammo: <span id="ammoText">10 / 10</span><br />
+    Press W/A/S/D to move, Left Click to shoot, R to reload.
   </div>
   <div id="crosshair"></div>
   <canvas id="gameCanvas"></canvas>
 
   <script src="https://cdn.jsdelivr.net/npm/three@0.125.2/build/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.125.2/examples/js/controls/PointerLockControls.js"></script>
+
   <script>
     const canvas = document.getElementById('gameCanvas');
-    const hud = document.getElementById('hud');
     const healthText = document.getElementById('healthText');
     const ammoText = document.getElementById('ammoText');
 
@@ -59,10 +55,9 @@
     let health = 100, ammo = 10, maxAmmo = 10;
     let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
     let velocity = new THREE.Vector3();
-    let direction = new THREE.Vector3();
     let canShoot = true;
 
-    const objects = []; // for collisions
+    const objects = []; // collision objects
 
     init();
     animate();
@@ -77,113 +72,59 @@
 
       clock = new THREE.Clock();
 
-      // Lighting
-      const ambient = new THREE.AmbientLight(0x888888);
-      const dir = new THREE.DirectionalLight(0xffffff, 1);
-      dir.position.set(10, 20, 10);
-      scene.add(ambient, dir);
+      // Lights
+      const ambientLight = new THREE.AmbientLight(0x888888);
+      const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+      directionalLight.position.set(10, 20, 10);
+      scene.add(ambientLight, directionalLight);
 
       // Floor
-      const floorMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
+      const floorMat = new THREE.MeshStandardMaterial({ color: 0x444444 });
       const floor = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), floorMat);
       floor.rotation.x = -Math.PI / 2;
       floor.receiveShadow = true;
       scene.add(floor);
       objects.push(floor);
 
-      // Airsoft field barriers (jersey barriers)
-      const barrierMat = new THREE.MeshStandardMaterial({ color: 0xcccccc });
-      const barrierGeo = new THREE.BoxGeometry(4, 1.5, 1.5);
-      const barrierPositions = [
-        [-20, 0.75, -10],
-        [-16, 0.75, -10],
-        [-12, 0.75, -10],
-        [-8, 0.75, -10],
-        [-4, 0.75, -10],
-        [0, 0.75, -10],
-        [4, 0.75, -10],
-        [8, 0.75, -10],
-        [12, 0.75, -10],
-        [16, 0.75, -10],
-        [20, 0.75, -10],
-        // Add some vertical lines
-        [-20, 0.75, -6],
-        [-20, 0.75, -2],
-        [-20, 0.75, 2],
-        [-20, 0.75, 6],
-        [-20, 0.75, 10],
-        [20, 0.75, 6],
-        [20, 0.75, 2],
-        [20, 0.75, -2],
-        [20, 0.75, -6],
-        [20, 0.75, -10],
+      // Container map (shipment style)
+      const containerColors = [0x008080, 0x004040, 0x006666];
+      const containerGeo = new THREE.BoxGeometry(4, 2.5, 12);
+      // Arrange containers in rows
+      const containerPositions = [
+        [-20, 1.25, -20],
+        [-14, 1.25, -20],
+        [-8, 1.25, -20],
+        [-2, 1.25, -20],
+        [4, 1.25, -20],
+        [10, 1.25, -20],
+        [16, 1.25, -20],
+
+        [-20, 1.25, -6],
+        [-14, 1.25, -6],
+        [-8, 1.25, -6],
+        [-2, 1.25, -6],
+        [4, 1.25, -6],
+        [10, 1.25, -6],
+        [16, 1.25, -6],
+
+        [-20, 1.25, 8],
+        [-14, 1.25, 8],
+        [-8, 1.25, 8],
+        [-2, 1.25, 8],
+        [4, 1.25, 8],
+        [10, 1.25, 8],
+        [16, 1.25, 8],
       ];
-      barrierPositions.forEach(pos => {
-        const b = new THREE.Mesh(barrierGeo, barrierMat);
-        b.position.set(pos[0], pos[1], pos[2]);
-        b.castShadow = true;
-        b.receiveShadow = true;
-        scene.add(b);
-        objects.push(b);
+
+      containerPositions.forEach((pos, i) => {
+        const mat = new THREE.MeshStandardMaterial({ color: containerColors[i % containerColors.length] });
+        const container = new THREE.Mesh(containerGeo, mat);
+        container.position.set(...pos);
+        scene.add(container);
+        objects.push(container);
       });
 
-      // Simple houses (enterable, no roofs)
-      const houseMat = new THREE.MeshStandardMaterial({ color: 0x886633, side: THREE.DoubleSide });
-      const wallGeo = new THREE.PlaneGeometry(6, 3);
-
-      // House 1 walls (open front)
-      const house1Walls = [];
-      const posX1 = -10, posZ1 = 10;
-      // back wall
-      const backWall1 = new THREE.Mesh(wallGeo, houseMat);
-      backWall1.position.set(posX1, 1.5, posZ1 - 3);
-      scene.add(backWall1);
-      house1Walls.push(backWall1);
-      objects.push(backWall1);
-      // left wall
-      const leftWall1 = new THREE.Mesh(wallGeo, houseMat);
-      leftWall1.position.set(posX1 - 3, 1.5, posZ1);
-      leftWall1.rotation.y = Math.PI / 2;
-      scene.add(leftWall1);
-      house1Walls.push(leftWall1);
-      objects.push(leftWall1);
-      // right wall
-      const rightWall1 = new THREE.Mesh(wallGeo, houseMat);
-      rightWall1.position.set(posX1 + 3, 1.5, posZ1);
-      rightWall1.rotation.y = -Math.PI / 2;
-      scene.add(rightWall1);
-      house1Walls.push(rightWall1);
-      objects.push(rightWall1);
-
-      // House 2 walls (open front)
-      const posX2 = 15, posZ2 = 20;
-      const backWall2 = new THREE.Mesh(wallGeo, houseMat);
-      backWall2.position.set(posX2, 1.5, posZ2 - 3);
-      scene.add(backWall2);
-      objects.push(backWall2);
-      const leftWall2 = new THREE.Mesh(wallGeo, houseMat);
-      leftWall2.position.set(posX2 - 3, 1.5, posZ2);
-      leftWall2.rotation.y = Math.PI / 2;
-      scene.add(leftWall2);
-      objects.push(leftWall2);
-      const rightWall2 = new THREE.Mesh(wallGeo, houseMat);
-      rightWall2.position.set(posX2 + 3, 1.5, posZ2);
-      rightWall2.rotation.y = -Math.PI / 2;
-      scene.add(rightWall2);
-      objects.push(rightWall2);
-
-      // Windows (shoot-through)
-      const windowMat = new THREE.MeshStandardMaterial({ color: 0x4444aa, opacity: 0.3, transparent: true });
-      const windowGeo = new THREE.PlaneGeometry(2, 1.5);
-      // Add windows on houses
-      const win1 = new THREE.Mesh(windowGeo, windowMat);
-      win1.position.set(posX1, 1.5, posZ1 - 2);
-      scene.add(win1);
-      const win2 = new THREE.Mesh(windowGeo, windowMat);
-      win2.position.set(posX2, 1.5, posZ2 - 2);
-      scene.add(win2);
-
-      // Player Controls
+      // Player Controls (PointerLockControls)
       controls = new THREE.PointerLockControls(camera, document.body);
       scene.add(controls.getObject());
 
@@ -191,18 +132,17 @@
       canvas.addEventListener('click', () => {
         if (!controls.isLocked) {
           controls.lock();
-          hud.style.display = 'block';
         }
       });
 
-      // Player weapon (gun)
+      // Gun model
       const gunMat = new THREE.MeshStandardMaterial({ color: 0x555555 });
       const gunGeo = new THREE.BoxGeometry(0.3, 0.2, 1);
       gun = new THREE.Mesh(gunGeo, gunMat);
       gun.position.set(0.5, -0.5, -1);
       camera.add(gun);
 
-      // Enemies
+      // Spawn enemies
       for(let i = 0; i < 5; i++) spawnEnemy();
 
       // Input listeners
@@ -217,7 +157,6 @@
       const enemyMat = new THREE.MeshStandardMaterial({ color: 0xaa0000 });
       const enemyGeo = new THREE.BoxGeometry(1, 2, 1);
       const enemy = new THREE.Mesh(enemyGeo, enemyMat);
-      // spawn enemies away from player start
       enemy.position.set(
         (Math.random() * 80) - 40,
         1,
@@ -246,7 +185,7 @@
       }
     }
     function onMouseDown(event) {
-      if(event.button === 0 && controls.isLocked) { // left mouse click
+      if(event.button === 0 && controls.isLocked) { // left click shoot
         shoot();
       }
     }
@@ -283,7 +222,6 @@
       renderer.setSize(window.innerWidth, window.innerHeight);
     }
 
-    // Simple collision detection
     function checkCollisions(position) {
       const radius = 0.3; // player radius
       for(let obj of objects){
@@ -295,59 +233,65 @@
       return false;
     }
 
-    // Animate loop
     function animate() {
       requestAnimationFrame(animate);
 
       const delta = clock.getDelta();
-
-      // Movement speed
       const speed = 5;
 
       velocity.x -= velocity.x * 10.0 * delta;
       velocity.z -= velocity.z * 10.0 * delta;
 
-      direction.z = Number(moveForward) - Number(moveBackward);
-      direction.x = Number(moveRight) - Number(moveLeft);
+      // Movement vector relative to camera direction (corrected)
+      let forward = new THREE.Vector3();
+      camera.getWorldDirection(forward);
+      forward.y = 0;
+      forward.normalize();
+
+      let right = new THREE.Vector3();
+      right.crossVectors(forward, camera.up);
+
+      direction = new THREE.Vector3();
+      if(moveForward) direction.add(forward);
+      if(moveBackward) direction.sub(forward);
+      if(moveRight) direction.add(right);
+      if(moveLeft) direction.sub(right);
       direction.normalize();
 
-      if(moveForward || moveBackward) velocity.z -= direction.z * speed * delta;
-      if(moveLeft || moveRight) velocity.x -= direction.x * speed * delta;
+      if(direction.length() > 0) {
+        velocity.x -= direction.x * speed * delta;
+        velocity.z -= direction.z * speed * delta;
+      }
 
-      // Calculate next position with velocity
       const nextPosition = controls.getObject().position.clone();
       nextPosition.x += velocity.x;
       nextPosition.z += velocity.z;
 
-      // Check collision before moving
       if(!checkCollisions(new THREE.Vector3(nextPosition.x, controls.getObject().position.y, nextPosition.z))){
         controls.getObject().position.copy(nextPosition);
       } else {
-        // stop velocity if collision
         velocity.x = 0;
         velocity.z = 0;
       }
 
-      // Bullets movement & lifetime
-      for(let i = bullets.length - 1; i >= 0; i--){
-        let b = bullets[i];
+      // Bullets move
+      for(let i = bullets.length - 1; i >= 0; i--) {
+        const b = bullets[i];
         b.position.add(b.userData.velocity);
         if(b.position.length() > 200){
           scene.remove(b);
           bullets.splice(i, 1);
           continue;
         }
-        // Check bullet collision with enemies
-        for(let j = enemies.length -1; j >= 0; j--){
+        for(let j = enemies.length - 1; j >= 0; j--) {
           const enemy = enemies[j];
-          if(b.position.distanceTo(enemy.position) < 1){
+          if(b.position.distanceTo(enemy.position) < 1) {
             enemy.health -= 50;
             scene.remove(b);
-            bullets.splice(i,1);
-            if(enemy.health <= 0){
+            bullets.splice(i, 1);
+            if(enemy.health <= 0) {
               scene.remove(enemy);
-              enemies.splice(j,1);
-              // Respawn enemy after 5 seconds
+              enemies.splice(j, 1);
               setTimeout(spawnEnemy, 5000);
             }
             break;
@@ -355,17 +299,14 @@
         }
       }
 
-      // Enemies behavior
+      // Enemy AI
       enemies.forEach(enemy => {
         let dirToPlayer = new THREE.Vector3().subVectors(controls.getObject().position, enemy.position);
-        let distance = dirToPlayer.length();
-
-        if(distance < 30){
+        let dist = dirToPlayer.length();
+        if(dist < 30){
           dirToPlayer.normalize();
-          enemy.position.add(dirToPlayer.multiplyScalar(1.2 * delta)); // enemy speed
-
-          if(distance < 10 && Math.random() < 0.01){
-            // Enemy shoots player, damage every second or so
+          enemy.position.add(dirToPlayer.multiplyScalar(1.2 * delta));
+          if(dist < 10 && Math.random() < 0.01){
             health -= 5;
             if(health < 0) health = 0;
             healthText.textContent = health;
@@ -381,7 +322,7 @@
       health = 100;
       healthText.textContent = health;
       controls.getObject().position.set(0, 1.6, 10);
-      velocity.set(0,0,0);
+      velocity.set(0, 0, 0);
     }
   </script>
 </body>
