@@ -100,8 +100,11 @@
       canvas.addEventListener('click', () => {
         if (!controls.isLocked) {
           controls.lock();
-  window.__GAME__ = { camera, scene, player, enemies, renderer };     
- }
+ console.log("Assigning __GAME__");
+
+window.__GAME__ = { camera, scene, player, enemies, renderer };
+console.log(window.__GAME__);
+     	 }
       });
 
       // Gun model
