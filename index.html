@@ -59,6 +59,12 @@
     let velocity = new THREE.Vector3();
     let canShoot = true;
 
+window.__GAME__ = window.__GAME__ || {};
+window.__GAME__.scene = scene;
+window.__GAME__.camera = camera;
+window.__GAME__.renderer = renderer;
+
+
     const objects = []; // collision objects (barriers, houses)
     const playerHeight = 1.6;
 
