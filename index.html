@@ -100,7 +100,8 @@
       canvas.addEventListener('click', () => {
         if (!controls.isLocked) {
           controls.lock();
-        }
+  window.__GAME__ = { camera, scene, player, enemies, renderer };     
+ }
       });
 
       // Gun model
@@ -398,7 +399,8 @@
       healthText.textContent = health;
       controls.getObject().position.set(0, playerHeight, 40);
       velocity.set(0, 0, 0);
-    }
+   
+ }
   </script>
 </body>
 </html>
